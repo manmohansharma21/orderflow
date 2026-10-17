@@ -1,0 +1,20 @@
+# Environment secrets
+.env
+.env.*
+!.env.example
+
+# Build outputs
+/bin/
+/dist/
+/build/
+*.exe
+*.out
+*.test
+
+# IDE and OS
+.DS_Store
+.idea/
+.vscode/
+
+# Go
+vendor/
