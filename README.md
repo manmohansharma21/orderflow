@@ -1,8 +1,8 @@
 # OrderFlow — E-commerce Order and Payment Management API
 
-**Author:** Manmohan Sharma  
-**Repository:** <https://github.com/manmohansharma21/orderflow>  
-**Verified implementation commit:** `1515cb0` — `feat: complete provider recovery and HTTP observability`  
+**Author:** Manmohan Sharma
+**Repository:** <https://github.com/manmohansharma21/orderflow>
+**Verified implementation commit:** `1515cb0` — `feat: complete provider recovery and HTTP observability`
 **CI result for that commit:** [GitHub Actions run 39160539244](https://github.com/manmohansharma21/orderflow/actions/runs/39160539244) — completed successfully.
 
 OrderFlow is a Go/Gin REST backend demonstrating catalogue, inventory, transactional order placement, simulated payment processing, idempotency, recovery of missed simulated-provider callbacks, operational reports and request observability. PostgreSQL is the source of truth. Redis is an optional product-read cache and is **disabled by default** because the tested local workload was slower with the warm cache.

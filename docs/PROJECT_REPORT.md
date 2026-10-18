@@ -1,10 +1,10 @@
 # OrderFlow — applied software project report source
 
-**Candidate:** Manmohan Sharma  
-**Programme:** Master of Science in Computer Science, Scaler Neovarsity - Woolf  
-**Supervisor shown in template:** Naman Bhalla  
-**Repository:** https://github.com/manmohansharma21/orderflow  
-**Implementation revision reviewed:** `1515cb0`  
+**Candidate:** Manmohan Sharma
+**Programme:** Master of Science in Computer Science, Scaler Neovarsity - Woolf
+**Supervisor shown in template:** Naman Bhalla
+**Repository:** https://github.com/manmohansharma21/orderflow
+**Implementation revision reviewed:** `1515cb0`
 **CI:** successful run https://github.com/manmohansharma21/orderflow/actions/runs/39160539244
 
 This Markdown file is the technical content source for the separate Word report. Use the supplied Word review draft as the submission layout; it follows the official report template structure, includes HLD/LLD/state diagrams and screenshot placeholders, and must be completed and exported to PDF after the final evidence session. Do not submit this Markdown file instead of the PDF required by the portal.

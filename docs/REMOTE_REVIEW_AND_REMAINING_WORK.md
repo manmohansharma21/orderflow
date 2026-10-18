@@ -1,6 +1,6 @@
 # OrderFlow remote review and remaining-work tracker
 
-**Reviewed remote HEAD:** `1515cb0` (`feat: complete provider recovery and HTTP observability`).  
+**Reviewed remote HEAD:** `1515cb0` (`feat: complete provider recovery and HTTP observability`).
 **CI:** successful: https://github.com/manmohansharma21/orderflow/actions/runs/39160539244
 
 ## Verified at this revision

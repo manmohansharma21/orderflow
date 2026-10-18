@@ -14,7 +14,8 @@ out="docs/evidence/performance/order-flow-benchmarks-$(date -u +%Y%m%dT%H%M%SZ).
   echo "Go: $(go version)"
   echo 'Database: dedicated orderflow_test; benchmarks create isolated fixtures and clean them up.'
   echo 'These are service/repository-path ns/op benchmarks, not HTTP P95 measurements.'
+  echo 'Run configuration: 200 ms per benchmark, one sample per benchmark to keep the demonstration bounded.'
   echo
-  go test -run='^$' -bench='BenchmarkOrder(Creation|HistoryList)$' -benchmem -count=3 ./internal/integration/...
+  go test -run='^$' -bench='BenchmarkOrder(Creation|HistoryList)$' -benchtime=200ms -benchmem -count=1 ./internal/integration/...
 } 2>&1 | tee "$out"
 echo "Saved order-flow benchmark output to $out"

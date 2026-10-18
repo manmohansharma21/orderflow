@@ -1,7 +1,7 @@
 # Finalization status — OrderFlow
 
-**Reviewed commit:** `1515cb0` (`feat: complete provider recovery and HTTP observability`).  
-**GitHub Actions:** completed successfully: https://github.com/manmohansharma21/orderflow/actions/runs/39160539244  
+**Reviewed commit:** `1515cb0` (`feat: complete provider recovery and HTTP observability`).
+**GitHub Actions:** completed successfully: https://github.com/manmohansharma21/orderflow/actions/runs/39160539244
 **Local evidence supplied:** reliability verification passed; Docker image built; `/health` and `/ready` returned successful JSON responses.
 
 ## Implemented and CI-verified at the reviewed commit

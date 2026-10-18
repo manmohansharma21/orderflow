@@ -101,6 +101,7 @@ func BenchmarkOrderCreation(b *testing.B) {
 func BenchmarkOrderHistoryList(b *testing.B) {
 	pool, ctx, userID, productID := openOrderFlowBenchmarkFixture(b, 1_000_000)
 	orders := service.NewOrderService(repository.NewOrderRepository(pool))
+
 	// Seed a stable 100-order history outside the measured interval.
 	b.StopTimer()
 	for i := 0; i < 100; i++ {
@@ -113,8 +114,10 @@ func BenchmarkOrderHistoryList(b *testing.B) {
 			b.Fatalf("seed benchmark history: %v", err)
 		}
 	}
+
 	b.ReportAllocs()
 	b.ResetTimer()
+	b.StartTimer() // Required: ResetTimer does not resume a stopped benchmark timer.
 	for i := 0; i < b.N; i++ {
 		if _, err := orders.ListForUser(ctx, userID, 1, 20); err != nil {
 			b.Fatalf("list benchmark order history: %v", err)
