@@ -17,11 +17,12 @@ type ProductList struct {
 }
 
 type CreateProductInput struct {
-	SKU          string
-	Name         string
-	Description  *string
-	PricePaise   int64
-	InitialStock int
+	SKU             string
+	Name            string
+	Description     *string
+	PricePaise      int64
+	InitialStock    int
+	CreatedByUserID string
 }
 
 type UpdateProductInput struct {

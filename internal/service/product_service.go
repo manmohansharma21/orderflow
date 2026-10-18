@@ -11,9 +11,6 @@ import (
 
 var ErrInvalidProduct = errors.New("invalid product")
 
-// ErrProductNotFound is declared in order_service.go and shared by services.
-// ErrDuplicateSKU is declared in the repository and translated to HTTP 409.
-
 type ProductService struct {
 	repo *repository.ProductRepository
 }
@@ -45,25 +42,28 @@ func (s *ProductService) List(
 }
 
 func (s *ProductService) GetByID(ctx context.Context, id string) (domain.Product, error) {
-	return s.repo.GetByID(ctx, id)
+	product, err := s.repo.GetByID(ctx, id)
+	if err != nil {
+		return domain.Product{}, err
+	}
+	return product, nil
 }
 
 func (s *ProductService) Create(
 	ctx context.Context,
 	input domain.CreateProductInput,
 ) (domain.Product, error) {
-	input.SKU = strings.ToUpper(strings.TrimSpace(input.SKU))
+	input.SKU = strings.TrimSpace(input.SKU)
 	input.Name = strings.TrimSpace(input.Name)
+	input.CreatedByUserID = strings.TrimSpace(input.CreatedByUserID)
 	if input.Description != nil {
 		description := strings.TrimSpace(*input.Description)
 		input.Description = &description
 	}
-	if input.SKU == "" || len(input.SKU) > 100 ||
-		input.Name == "" || len(input.Name) > 255 ||
-		input.PricePaise < 0 || input.InitialStock < 0 || input.InitialStock > 2147483647 {
-		return domain.Product{}, ErrInvalidProduct
-	}
-	if input.Description != nil && len(*input.Description) > 4000 {
+	if len(input.SKU) == 0 || len(input.SKU) > 100 ||
+		len(input.Name) == 0 || len(input.Name) > 255 ||
+		input.PricePaise < 0 || input.InitialStock < 0 || input.InitialStock > 1_000_000 ||
+		input.CreatedByUserID == "" {
 		return domain.Product{}, ErrInvalidProduct
 	}
 	return s.repo.Create(ctx, input)
@@ -74,30 +74,27 @@ func (s *ProductService) Update(
 	id string,
 	input domain.UpdateProductInput,
 ) (domain.Product, error) {
-	if input.SKU == nil && input.Name == nil && input.Description == nil &&
-		input.PricePaise == nil && input.IsActive == nil {
+	id = strings.TrimSpace(id)
+	if id == "" || (input.SKU == nil && input.Name == nil && input.Description == nil && input.PricePaise == nil && input.IsActive == nil) {
 		return domain.Product{}, ErrInvalidProduct
 	}
 	if input.SKU != nil {
-		v := strings.ToUpper(strings.TrimSpace(*input.SKU))
-		if v == "" || len(v) > 100 {
+		value := strings.TrimSpace(*input.SKU)
+		if len(value) == 0 || len(value) > 100 {
 			return domain.Product{}, ErrInvalidProduct
 		}
-		input.SKU = &v
+		input.SKU = &value
 	}
 	if input.Name != nil {
-		v := strings.TrimSpace(*input.Name)
-		if v == "" || len(v) > 255 {
+		value := strings.TrimSpace(*input.Name)
+		if len(value) == 0 || len(value) > 255 {
 			return domain.Product{}, ErrInvalidProduct
 		}
-		input.Name = &v
+		input.Name = &value
 	}
 	if input.Description != nil {
-		v := strings.TrimSpace(*input.Description)
-		if len(v) > 4000 {
-			return domain.Product{}, ErrInvalidProduct
-		}
-		input.Description = &v
+		value := strings.TrimSpace(*input.Description)
+		input.Description = &value
 	}
 	if input.PricePaise != nil && *input.PricePaise < 0 {
 		return domain.Product{}, ErrInvalidProduct
@@ -106,5 +103,9 @@ func (s *ProductService) Update(
 }
 
 func (s *ProductService) Deactivate(ctx context.Context, id string) (domain.Product, error) {
+	id = strings.TrimSpace(id)
+	if id == "" {
+		return domain.Product{}, ErrInvalidProduct
+	}
 	return s.repo.Deactivate(ctx, id)
 }

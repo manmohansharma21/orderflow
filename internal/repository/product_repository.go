@@ -106,6 +106,20 @@ func (r *ProductRepository) Create(
 		return domain.Product{}, err
 	}
 
+	if input.InitialStock > 0 {
+		_, err = tx.Exec(ctx, `
+			INSERT INTO inventory_movements (
+				product_id, movement_type, on_hand_delta, reserved_delta,
+				on_hand_after, reserved_after, reason, created_by_user_id
+			)
+			VALUES ($1, 'OPENING_BALANCE', $2, 0, $2, 0,
+			        'Initial stock set during product creation', NULLIF($3, '')::uuid)
+		`, p.ID, input.InitialStock, input.CreatedByUserID)
+		if err != nil {
+			return domain.Product{}, err
+		}
+	}
+
 	if err := tx.Commit(ctx); err != nil {
 		return domain.Product{}, err
 	}

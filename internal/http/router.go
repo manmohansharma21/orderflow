@@ -67,6 +67,14 @@ func NewRouter(pool databasePinger, readinessTimeoutSeconds int) *gin.Engine {
 		router.POST("/products", AuthRequired(), RequireRole("ADMIN"), products.create)
 		router.PATCH("/products/:id", AuthRequired(), RequireRole("ADMIN"), products.update)
 		router.DELETE("/products/:id", AuthRequired(), RequireRole("ADMIN"), products.deactivate)
+
+		inventoryRepo := repository.NewInventoryRepository(dbPool)
+		inventoryService := service.NewInventoryService(inventoryRepo)
+		inventory := newInventoryHandler(inventoryService)
+		router.GET("/inventory/:product_id", inventory.getAvailability)
+		router.POST("/admin/inventory/receipts", AuthRequired(), RequireRole("ADMIN"), inventory.receiveStock)
+		router.POST("/admin/inventory/adjustments", AuthRequired(), RequireRole("ADMIN"), inventory.adjustStock)
+		router.GET("/admin/inventory/movements", AuthRequired(), RequireRole("ADMIN"), inventory.listMovements)
 	}
 
 	return router

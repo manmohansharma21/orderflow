@@ -33,11 +33,7 @@ func (s *OrderService) CreateOrder(
 ) (domain.CreateOrderResult, error) {
 	req.UserID = strings.TrimSpace(req.UserID)
 	req.ProductID = strings.TrimSpace(req.ProductID)
-
-	if req.UserID == "" ||
-		req.ProductID == "" ||
-		req.Quantity < 1 ||
-		req.Quantity > 10000 {
+	if req.UserID == "" || req.ProductID == "" || req.Quantity < 1 || req.Quantity > 10000 {
 		return domain.CreateOrderResult{}, ErrInvalidOrder
 	}
 
@@ -47,30 +43,20 @@ func (s *OrderService) CreateOrder(
 	}
 	defer tx.Rollback(ctx)
 
-	productName, pricePaise, err := s.repo.GetActiveProduct(
-		ctx,
-		tx,
-		req.ProductID,
-	)
+	productName, pricePaise, err := s.repo.GetActiveProduct(ctx, tx, req.ProductID)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return domain.CreateOrderResult{}, ErrProductNotFound
 		}
 		return domain.CreateOrderResult{}, err
 	}
-
-	if pricePaise > 0 &&
-		int64(req.Quantity) > math.MaxInt64/pricePaise {
+	if pricePaise > 0 && int64(req.Quantity) > math.MaxInt64/pricePaise {
 		return domain.CreateOrderResult{}, ErrInvalidOrder
 	}
-
 	totalPaise := pricePaise * int64(req.Quantity)
 
-	reserved, err := s.repo.ReserveInventory(
-		ctx,
-		tx,
-		req.ProductID,
-		req.Quantity,
+	reserved, onHandAfter, reservedAfter, err := s.repo.ReserveInventory(
+		ctx, tx, req.ProductID, req.Quantity,
 	)
 	if err != nil {
 		return domain.CreateOrderResult{}, err
@@ -79,12 +65,7 @@ func (s *OrderService) CreateOrder(
 		return domain.CreateOrderResult{}, ErrInsufficientStock
 	}
 
-	orderID, err := s.repo.CreateOrder(
-		ctx,
-		tx,
-		req.UserID,
-		totalPaise,
-	)
+	orderID, err := s.repo.CreateOrder(ctx, tx, req.UserID, totalPaise)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return domain.CreateOrderResult{}, ErrUserNotFound
@@ -92,19 +73,24 @@ func (s *OrderService) CreateOrder(
 		return domain.CreateOrderResult{}, err
 	}
 
-	if err := s.repo.CreateOrderItem(
-		ctx,
-		tx,
-		orderID,
-		req.ProductID,
-		productName,
-		req.Quantity,
-		pricePaise,
-		totalPaise,
-	); err != nil {
+	if err := s.repo.RecordInventoryMovement(ctx, tx, domain.InventoryMovementInput{
+		ProductID:       req.ProductID,
+		MovementType:    "ORDER_RESERVED",
+		OnHandDelta:     0,
+		ReservedDelta:   req.Quantity,
+		OnHandAfter:     onHandAfter,
+		ReservedAfter:   reservedAfter,
+		Reason:          "Stock reserved for order creation",
+		CreatedByUserID: req.UserID,
+		ReferenceType:   "ORDER",
+		ReferenceID:     orderID,
+	}); err != nil {
 		return domain.CreateOrderResult{}, err
 	}
 
+	if err := s.repo.CreateOrderItem(ctx, tx, orderID, req.ProductID, productName, req.Quantity, pricePaise, totalPaise); err != nil {
+		return domain.CreateOrderResult{}, err
+	}
 	if err := tx.Commit(ctx); err != nil {
 		return domain.CreateOrderResult{}, err
 	}

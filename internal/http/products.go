@@ -82,6 +82,7 @@ func (h *productHandler) create(c *gin.Context) {
 	product, err := h.service.Create(c.Request.Context(), domain.CreateProductInput{
 		SKU: req.SKU, Name: req.Name, Description: req.Description,
 		PricePaise: *req.PricePaise, InitialStock: req.InitialStock,
+		CreatedByUserID: c.GetString("user_id"),
 	})
 	if err != nil {
 		writeProductError(c, err)
