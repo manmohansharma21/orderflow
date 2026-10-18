@@ -9,9 +9,9 @@ import (
 	"syscall"
 	"time"
 
-	"manmohansharma21/internal/config"
-	"manmohansharma21/internal/database"
-	apphttp "manmohansharma21/internal/http"
+	"github.com/manmohansharma21/orderflow/internal/config"
+	"github.com/manmohansharma21/orderflow/internal/database"
+	apphttp "github.com/manmohansharma21/orderflow/internal/http"
 )
 
 func main() {
@@ -32,7 +32,7 @@ func main() {
 	}
 	defer pool.Close()
 
-	router := apphttp.NewRouter(pool)
+	router := apphttp.NewRouter(pool, cfg.ReadinessTimeoutSeconds)
 
 	server := &http.Server{
 		Addr:              ":" + cfg.Port,

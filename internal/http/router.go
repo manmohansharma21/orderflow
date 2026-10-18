@@ -9,7 +9,11 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-func NewRouter(pool *pgxpool.Pool) *gin.Engine {
+type databasePinger interface {
+	Ping(context.Context) error
+}
+
+func NewRouter(pool databasePinger, readinessTimeoutSeconds int) *gin.Engine {
 	router := gin.New()
 
 	router.Use(gin.Logger())
@@ -24,7 +28,7 @@ func NewRouter(pool *pgxpool.Pool) *gin.Engine {
 	router.GET("/ready", func(c *gin.Context) {
 		ctx, cancel := context.WithTimeout(
 			c.Request.Context(),
-			3*time.Second,
+			time.Duration(readinessTimeoutSeconds)*time.Second,
 		)
 		defer cancel()
 
@@ -39,6 +43,11 @@ func NewRouter(pool *pgxpool.Pool) *gin.Engine {
 			"status": "ready",
 		})
 	})
+
+	if dbPool, ok := pool.(*pgxpool.Pool); ok {
+		orders := &orderHandler{pool: dbPool}
+		router.POST("/orders", orders.createOrder)
+	}
 
 	return router
 }
