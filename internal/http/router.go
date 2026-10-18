@@ -18,14 +18,10 @@ type databasePinger interface {
 
 func NewRouter(pool databasePinger, readinessTimeoutSeconds int) *gin.Engine {
 	router := gin.New()
-
-	router.Use(gin.Logger())
-	router.Use(gin.Recovery())
+	router.Use(gin.Logger(), gin.Recovery())
 
 	router.GET("/health", func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{
-			"status": "ok",
-		})
+		c.JSON(http.StatusOK, gin.H{"status": "ok"})
 	})
 
 	router.GET("/ready", func(c *gin.Context) {
@@ -42,17 +38,20 @@ func NewRouter(pool databasePinger, readinessTimeoutSeconds int) *gin.Engine {
 			return
 		}
 
-		c.JSON(http.StatusOK, gin.H{
-			"status": "ready",
-		})
+		c.JSON(http.StatusOK, gin.H{"status": "ready"})
 	})
 
 	if dbPool, ok := pool.(*pgxpool.Pool); ok {
 		orderRepo := repository.NewOrderRepository(dbPool)
 		orderService := service.NewOrderService(orderRepo)
-		orders := newOrderHandler(orderService)
+		router.POST("/orders", newOrderHandler(orderService).createOrder)
 
-		router.POST("/orders", orders.createOrder)
+		productRepo := repository.NewProductRepository(dbPool)
+		productService := service.NewProductService(productRepo)
+		products := newProductHandler(productService)
+
+		router.GET("/products", products.list)
+		router.GET("/products/:id", products.getByID)
 	}
 
 	return router
