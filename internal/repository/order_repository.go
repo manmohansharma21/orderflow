@@ -85,25 +85,25 @@ func (r *OrderRepository) ReserveInventory(
 }
 
 // CreateOrder inserts an order and returns its ID.
-func (r *OrderRepository) CreateOrder(
-	ctx context.Context,
-	tx pgx.Tx,
-	customerEmail string,
-	totalAmountPaise int64,
-) (string, error) {
-	var orderID string
+// func (r *OrderRepository) CreateOrder(
+// 	ctx context.Context,
+// 	tx pgx.Tx,
+// 	customerEmail string,
+// 	totalAmountPaise int64,
+// ) (string, error) {
+// 	var orderID string
 
-	err := tx.QueryRow(ctx, `
-		INSERT INTO orders (
-			customer_email,
-			total_amount_paise
-		)
-		VALUES ($1, $2)
-		RETURNING id
-	`, customerEmail, totalAmountPaise).Scan(&orderID)
+// 	err := tx.QueryRow(ctx, `
+// 		INSERT INTO orders (
+// 			customer_email,
+// 			total_amount_paise
+// 		)
+// 		VALUES ($1, $2)
+// 		RETURNING id
+// 	`, customerEmail, totalAmountPaise).Scan(&orderID)
 
-	return orderID, err
-}
+// 	return orderID, err
+// }
 
 // CreateOrderItem inserts an order item.
 func (r *OrderRepository) CreateOrderItem(
@@ -136,4 +136,32 @@ func (r *OrderRepository) CreateOrderItem(
 	)
 
 	return err
+}
+
+// CreateOrder creates an order using the registered user's database identity.
+// The email is read from the users table, never trusted from request JSON.
+func (r *OrderRepository) CreateOrder(
+	ctx context.Context,
+	tx pgx.Tx,
+	userID string,
+	totalAmountPaise int64,
+) (string, error) {
+	var orderID string
+
+	err := tx.QueryRow(ctx, `
+		INSERT INTO orders (
+			user_id,
+			customer_email,
+			total_amount_paise
+		)
+		SELECT
+			u.id,
+			u.email,
+			$2
+		FROM users AS u
+		WHERE u.id = $1
+		RETURNING id
+	`, userID, totalAmountPaise).Scan(&orderID)
+
+	return orderID, err
 }

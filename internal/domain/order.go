@@ -1,9 +1,9 @@
 package domain
 
 type CreateOrderRequest struct {
-	CustomerEmail string
-	ProductID     string
-	Quantity      int
+	UserID    string
+	ProductID string
+	Quantity  int
 }
 
 type CreateOrderResult struct {

@@ -14,6 +14,7 @@ import (
 
 var (
 	ErrProductNotFound   = errors.New("product not found")
+	ErrUserNotFound      = errors.New("user not found")
 	ErrInsufficientStock = errors.New("insufficient stock")
 	ErrInvalidOrder      = errors.New("invalid order")
 )
@@ -23,18 +24,17 @@ type OrderService struct {
 }
 
 func NewOrderService(repo *repository.OrderRepository) *OrderService {
-	return &OrderService{
-		repo: repo,
-	}
+	return &OrderService{repo: repo}
 }
 
 func (s *OrderService) CreateOrder(
 	ctx context.Context,
 	req domain.CreateOrderRequest,
 ) (domain.CreateOrderResult, error) {
-	req.CustomerEmail = strings.TrimSpace(req.CustomerEmail)
+	req.UserID = strings.TrimSpace(req.UserID)
+	req.ProductID = strings.TrimSpace(req.ProductID)
 
-	if req.CustomerEmail == "" ||
+	if req.UserID == "" ||
 		req.ProductID == "" ||
 		req.Quantity < 1 ||
 		req.Quantity > 10000 {
@@ -59,7 +59,6 @@ func (s *OrderService) CreateOrder(
 		return domain.CreateOrderResult{}, err
 	}
 
-	// Prevent int64 overflow when calculating the order total.
 	if pricePaise > 0 &&
 		int64(req.Quantity) > math.MaxInt64/pricePaise {
 		return domain.CreateOrderResult{}, ErrInvalidOrder
@@ -83,14 +82,17 @@ func (s *OrderService) CreateOrder(
 	orderID, err := s.repo.CreateOrder(
 		ctx,
 		tx,
-		req.CustomerEmail,
+		req.UserID,
 		totalPaise,
 	)
 	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return domain.CreateOrderResult{}, ErrUserNotFound
+		}
 		return domain.CreateOrderResult{}, err
 	}
 
-	err = s.repo.CreateOrderItem(
+	if err := s.repo.CreateOrderItem(
 		ctx,
 		tx,
 		orderID,
@@ -99,8 +101,7 @@ func (s *OrderService) CreateOrder(
 		req.Quantity,
 		pricePaise,
 		totalPaise,
-	)
-	if err != nil {
+	); err != nil {
 		return domain.CreateOrderResult{}, err
 	}
 
