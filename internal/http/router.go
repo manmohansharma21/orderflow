@@ -44,7 +44,10 @@ func NewRouter(pool databasePinger, readinessTimeoutSeconds int) *gin.Engine {
 		router.POST("/auth/login", auth.login)
 
 		router.GET("/profile", AuthRequired(), func(c *gin.Context) {
-			c.JSON(http.StatusOK, gin.H{"user_id": c.GetString("user_id"), "role": c.GetString("user_role")})
+			c.JSON(http.StatusOK, gin.H{
+				"user_id": c.GetString("user_id"),
+				"role":    c.GetString("user_role"),
+			})
 		})
 		router.POST("/admin/example", AuthRequired(), RequireRole("ADMIN"), func(c *gin.Context) {
 			c.JSON(http.StatusOK, gin.H{"status": "admin access granted"})
@@ -57,6 +60,18 @@ func NewRouter(pool databasePinger, readinessTimeoutSeconds int) *gin.Engine {
 		router.GET("/orders", AuthRequired(), orders.listOrders)
 		router.GET("/orders/:id", AuthRequired(), orders.getOrder)
 		router.POST("/orders/:id/cancel", AuthRequired(), orders.cancelOrder)
+
+		paymentRepo := repository.NewPaymentRepository(dbPool)
+		paymentService := service.NewPaymentService(paymentRepo)
+		payments := newPaymentHandler(paymentService)
+		router.POST("/orders/:id/payments", AuthRequired(), payments.createForOrder)
+		router.POST("/payments/mock-callback", payments.mockCallback)
+		router.GET(
+			"/admin/payments/reconciliation",
+			AuthRequired(),
+			RequireRole("ADMIN"),
+			payments.reconciliation,
+		)
 
 		productRepo := repository.NewProductRepository(dbPool)
 		productService := service.NewProductService(productRepo)
