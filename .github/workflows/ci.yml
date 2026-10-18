@@ -1,0 +1,59 @@
+name: Go CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: orderflow_test
+          POSTGRES_USER: orderflow
+          POSTGRES_PASSWORD: orderflow_test_password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U orderflow -d orderflow_test"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 20
+    env:
+      ORDERFLOW_TEST_DATABASE_URL: postgres://orderflow:orderflow_test_password@localhost:5432/orderflow_test?sslmode=disable
+      PGPASSWORD: orderflow_test_password
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Go from go.mod
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Install PostgreSQL client
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes postgresql-client
+      - name: Apply migrations to disposable CI database
+        shell: bash
+        run: |
+          set -euo pipefail
+          for migration in migrations/*.up.sql; do
+            echo "Applying ${migration}"
+            psql "$ORDERFLOW_TEST_DATABASE_URL" -v ON_ERROR_STOP=1 -f "$migration"
+          done
+      - name: Unit and integration tests
+        run: go test -count=1 ./...
+      - name: Race-enabled integration tests
+        run: go test -race -count=1 ./internal/integration/...
+      - name: Vet
+        run: go vet ./...
+      - name: Check whitespace errors
+        run: git diff --check

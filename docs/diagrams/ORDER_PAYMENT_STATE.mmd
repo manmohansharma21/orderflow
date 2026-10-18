@@ -1,0 +1,8 @@
+stateDiagram-v2
+    [*] --> PENDING: Order created / inventory reserved
+    PENDING --> CONFIRMED: Payment callback SUCCESS
+    PENDING --> FAILED: Payment callback FAILED / release reservation
+    PENDING --> CANCELLED: Customer cancels / release reservation
+    CONFIRMED --> [*]
+    FAILED --> [*]
+    CANCELLED --> [*]

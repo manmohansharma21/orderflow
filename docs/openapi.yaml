@@ -1,0 +1,701 @@
+openapi: 3.0.3
+info:
+  title: OrderFlow REST API
+  version: 1.0.0
+  description: >-
+    OpenAPI contract for the Go/Gin OrderFlow backend. Payment processing is a
+    mock provider; the mock callback uses HMAC-SHA256 over the exact raw body.
+servers:
+  - url: http://localhost:8080
+    description: Local development
+  - url: https://{host}
+    description: Optional deployed environment; replace host before use
+    variables:
+      host:
+        default: api.example.com
+        description: Your deployment hostname (not provisioned by this repository)
+tags:
+  - name: Operations
+  - name: Authentication
+  - name: Products
+  - name: Inventory
+  - name: Orders
+  - name: Payments
+  - name: Administration
+paths:
+  /health:
+    get:
+      tags: [Operations]
+      summary: Liveness check
+      responses:
+        '200':
+          description: Process is responding
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/StatusResponse'}
+              example: {status: ok}
+  /ready:
+    get:
+      tags: [Operations]
+      summary: Database readiness check
+      responses:
+        '200':
+          description: PostgreSQL responds to ping
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/StatusResponse'}
+              example: {status: ready}
+        '503':
+          $ref: '#/components/responses/NotReady'
+  /auth/register:
+    post:
+      tags: [Authentication]
+      summary: Register a customer
+      description: New public registrations always receive the CUSTOMER role.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/RegisterRequest'}
+            example: {email: customer@example.test, password: 'ChangeMe123!'}
+      responses:
+        '201':
+          description: Customer created
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/RegisteredUser'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '409': {$ref: '#/components/responses/Conflict'}
+  /auth/login:
+    post:
+      tags: [Authentication]
+      summary: Obtain a bearer JWT
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/LoginRequest'}
+      responses:
+        '200':
+          description: Token issued
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/LoginResponse'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+  /profile:
+    get:
+      tags: [Authentication]
+      summary: Get the current token's user ID and role
+      security: [{BearerAuth: []}]
+      responses:
+        '200':
+          description: Current principal
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ProfileResponse'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+  /admin/example:
+    post:
+      tags: [Administration]
+      summary: Example ADMIN-only endpoint
+      security: [{BearerAuth: []}]
+      responses:
+        '200':
+          description: Admin access accepted
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/StatusResponse'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+  /products:
+    get:
+      tags: [Products]
+      summary: Search and list active products
+      parameters:
+        - in: query
+          name: search
+          schema: {type: string}
+          description: Case-insensitive substring match against product name or SKU
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Product page
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ProductList'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '500': {$ref: '#/components/responses/ServerError'}
+    post:
+      tags: [Products]
+      summary: Create a product with initial inventory (ADMIN)
+      security: [{BearerAuth: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/CreateProductRequest'}
+            example:
+              sku: ORDERFLOW-TEST-001
+              name: Demo Product
+              description: Product for local coursework test
+              price_paise: 49900
+              initial_stock: 25
+      responses:
+        '201':
+          description: Product created
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Product'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '500': {$ref: '#/components/responses/ServerError'}
+  /products/{id}:
+    parameters:
+      - $ref: '#/components/parameters/UUIDPathId'
+    get:
+      tags: [Products]
+      summary: Get an active product by ID
+      responses:
+        '200':
+          description: Product detail
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Product'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '404': {$ref: '#/components/responses/NotFound'}
+    patch:
+      tags: [Products]
+      summary: Update supplied product fields (ADMIN)
+      security: [{BearerAuth: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/UpdateProductRequest'}
+      responses:
+        '200':
+          description: Updated product
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Product'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+    delete:
+      tags: [Products]
+      summary: Deactivate a product (ADMIN; soft delete)
+      security: [{BearerAuth: []}]
+      responses:
+        '200':
+          description: Product with is_active=false
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Product'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+  /inventory/{product_id}:
+    get:
+      tags: [Inventory]
+      summary: Get the current stock summary for an active product
+      parameters:
+        - name: product_id
+          in: path
+          required: true
+          schema: {$ref: '#/components/schemas/UUID'}
+      responses:
+        '200':
+          description: Current inventory summary
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/InventorySummary'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '404': {$ref: '#/components/responses/NotFound'}
+  /admin/inventory/receipts:
+    post:
+      tags: [Inventory, Administration]
+      summary: Receive positive stock quantity (ADMIN)
+      security: [{BearerAuth: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/ReceiveStockRequest'}
+            example: {product_id: '308e809b-1ace-455a-b089-2c4da6be8e23', quantity: 5, reason: Supplier delivery}
+      responses:
+        '200':
+          description: Updated inventory summary
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/InventorySummary'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+  /admin/inventory/adjustments:
+    post:
+      tags: [Inventory, Administration]
+      summary: Apply a signed stock adjustment delta (ADMIN)
+      security: [{BearerAuth: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/AdjustStockRequest'}
+            example: {product_id: '308e809b-1ace-455a-b089-2c4da6be8e23', quantity_delta: -1, reason: Damaged unit write-off}
+      responses:
+        '200':
+          description: Updated inventory summary
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/InventorySummary'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+  /admin/inventory/movements:
+    get:
+      tags: [Inventory, Administration]
+      summary: List inventory movements (ADMIN)
+      security: [{BearerAuth: []}]
+      parameters:
+        - in: query
+          name: product_id
+          schema: {$ref: '#/components/schemas/UUID'}
+        - in: query
+          name: type
+          schema:
+            type: string
+            enum: [OPENING_BALANCE, RECEIPT, ADJUSTMENT, ORDER_RESERVED, ORDER_RELEASED, ORDER_FULFILLED, REFUND_RESTOCK]
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Inventory movement page
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/InventoryMovementList'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+  /orders:
+    post:
+      tags: [Orders]
+      summary: Create an order and reserve stock
+      security: [{BearerAuth: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/CreateOrderRequest'}
+            example: {product_id: '308e809b-1ace-455a-b089-2c4da6be8e23', quantity: 1}
+      responses:
+        '201':
+          description: Order created in PENDING state
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/CreateOrderResponse'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '500': {$ref: '#/components/responses/ServerError'}
+    get:
+      tags: [Orders]
+      summary: List the current user's orders
+      security: [{BearerAuth: []}]
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Order page
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/OrderList'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+  /orders/{id}:
+    parameters:
+      - $ref: '#/components/parameters/UUIDPathId'
+    get:
+      tags: [Orders]
+      summary: Get an order owned by the current user
+      security: [{BearerAuth: []}]
+      responses:
+        '200':
+          description: Order and items
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Order'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '404': {$ref: '#/components/responses/NotFound'}
+  /orders/{id}/cancel:
+    post:
+      tags: [Orders]
+      summary: Cancel a PENDING order and release reserved stock
+      security: [{BearerAuth: []}]
+      parameters:
+        - $ref: '#/components/parameters/UUIDPathId'
+      responses:
+        '200':
+          description: Cancelled order
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Order'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+  /orders/{id}/payments:
+    post:
+      tags: [Payments]
+      summary: Initiate or retrieve a pending mock payment for an owned order
+      security: [{BearerAuth: []}]
+      parameters:
+        - $ref: '#/components/parameters/UUIDPathId'
+        - in: header
+          name: Idempotency-Key
+          required: true
+          schema: {type: string, minLength: 8, maxLength: 200}
+          description: Stable key for retrying the same payment-initiation request
+      responses:
+        '201':
+          description: Payment record (also returned when an existing idempotent attempt is found)
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Payment'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+  /payments/mock-callback:
+    post:
+      tags: [Payments]
+      summary: Process a mock provider callback
+      description: >-
+        No bearer JWT is required. The body must be signed with HMAC-SHA256
+        using MOCK_PAYMENT_WEBHOOK_SECRET. Sign the exact raw request bytes and
+        set X-Mock-Signature to sha256=<hex digest>. This endpoint is mock-only,
+        not a Stripe webhook implementation.
+      parameters:
+        - in: header
+          name: X-Mock-Signature
+          required: true
+          schema: {type: string, pattern: '^sha256=[0-9a-fA-F]{64}$'}
+          description: HMAC-SHA256 signature of the exact raw JSON body
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/MockPaymentCallbackRequest'}
+            example: {payment_id: '22222222-2222-4222-8222-222222222222', outcome: SUCCESS, event_id: evt-unique-001}
+      responses:
+        '200':
+          description: Callback accepted or same-outcome replay acknowledged
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Payment'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {description: Invalid HMAC signature}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '413': {description: Callback body larger than 64 KiB}
+        '503': {description: Mock webhook secret is not configured}
+  /admin/payments/reconciliation:
+    get:
+      tags: [Payments, Administration]
+      summary: Report stale pending payments and selected payment/order mismatches
+      security: [{BearerAuth: []}]
+      parameters:
+        - in: query
+          name: older_than_minutes
+          schema: {type: integer, minimum: 1, maximum: 10080, default: 15}
+          description: Age threshold used by the stale-pending-payment check
+      responses:
+        '200':
+          description: Reconciliation report
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ReconciliationReport'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '500': {$ref: '#/components/responses/ServerError'}
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  parameters:
+    Page:
+      in: query
+      name: page
+      schema: {type: integer, minimum: 1, default: 1}
+    Limit:
+      in: query
+      name: limit
+      schema: {type: integer, minimum: 1, maximum: 100, default: 20}
+    UUIDPathId:
+      in: path
+      name: id
+      required: true
+      schema: {$ref: '#/components/schemas/UUID'}
+  responses:
+    BadRequest:
+      description: Invalid request or query value
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Error'}
+    Unauthorized:
+      description: Missing or invalid bearer token, or authentication failure
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Error'}
+    Forbidden:
+      description: Authenticated principal lacks the ADMIN role
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Error'}
+    NotFound:
+      description: Resource not found or not visible to the current user
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Error'}
+    Conflict:
+      description: Inventory, state-transition, duplicate-key or idempotency conflict
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Error'}
+    ServerError:
+      description: Unexpected server-side operation failure
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Error'}
+    NotReady:
+      description: Database readiness probe failed
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/StatusResponse'}
+  schemas:
+    UUID:
+      type: string
+      format: uuid
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error: {type: string}
+    StatusResponse:
+      type: object
+      required: [status]
+      properties:
+        status: {type: string}
+    RegisterRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email: {type: string, format: email, maxLength: 255}
+        password: {type: string, minLength: 8, format: password}
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email: {type: string, format: email}
+        password: {type: string, minLength: 1, format: password}
+    RegisteredUser:
+      type: object
+      required: [id, email, role]
+      properties:
+        id: {$ref: '#/components/schemas/UUID'}
+        email: {type: string, format: email}
+        role: {type: string, enum: [CUSTOMER, ADMIN]}
+    LoginResponse:
+      type: object
+      required: [access_token, token_type, expires_in, user]
+      properties:
+        access_token: {type: string}
+        token_type: {type: string, example: Bearer}
+        expires_in: {type: integer, example: 86400}
+        user: {$ref: '#/components/schemas/RegisteredUser'}
+    ProfileResponse:
+      type: object
+      required: [user_id, role]
+      properties:
+        user_id: {$ref: '#/components/schemas/UUID'}
+        role: {type: string, enum: [CUSTOMER, ADMIN]}
+    Product:
+      type: object
+      required: [id, sku, name, price_paise, is_active]
+      properties:
+        id: {$ref: '#/components/schemas/UUID'}
+        sku: {type: string, maxLength: 100}
+        name: {type: string, maxLength: 255}
+        description: {type: string, nullable: true}
+        price_paise: {type: integer, format: int64, minimum: 0, description: Price in Indian paise}
+        is_active: {type: boolean}
+    ProductList:
+      type: object
+      required: [items, page, limit, total]
+      properties:
+        items: {type: array, items: {$ref: '#/components/schemas/Product'}}
+        page: {type: integer}
+        limit: {type: integer}
+        total: {type: integer, format: int64}
+    CreateProductRequest:
+      type: object
+      required: [sku, name, price_paise]
+      properties:
+        sku: {type: string, minLength: 1, maxLength: 100}
+        name: {type: string, minLength: 1, maxLength: 255}
+        description: {type: string, nullable: true}
+        price_paise: {type: integer, format: int64, minimum: 0}
+        initial_stock: {type: integer, minimum: 0, default: 0, maximum: 1000000}
+    UpdateProductRequest:
+      type: object
+      minProperties: 1
+      properties:
+        sku: {type: string, minLength: 1, maxLength: 100}
+        name: {type: string, minLength: 1, maxLength: 255}
+        description: {type: string, nullable: true}
+        price_paise: {type: integer, format: int64, minimum: 0}
+        is_active: {type: boolean}
+    InventorySummary:
+      type: object
+      required: [product_id, sku, product_name, on_hand_quantity, reserved_quantity, available_quantity]
+      properties:
+        product_id: {$ref: '#/components/schemas/UUID'}
+        sku: {type: string}
+        product_name: {type: string}
+        on_hand_quantity: {type: integer, minimum: 0}
+        reserved_quantity: {type: integer, minimum: 0}
+        available_quantity: {type: integer, minimum: 0}
+    ReceiveStockRequest:
+      type: object
+      required: [product_id, quantity, reason]
+      properties:
+        product_id: {$ref: '#/components/schemas/UUID'}
+        quantity: {type: integer, minimum: 1, maximum: 1000000}
+        reason: {type: string, minLength: 3, maxLength: 500}
+    AdjustStockRequest:
+      type: object
+      required: [product_id, quantity_delta, reason]
+      properties:
+        product_id: {$ref: '#/components/schemas/UUID'}
+        quantity_delta: {type: integer, minimum: -1000000, maximum: 1000000, not: {enum: [0]}}
+        reason: {type: string, minLength: 3, maxLength: 500}
+    InventoryMovement:
+      type: object
+      required: [id, product_id, sku, product_name, movement_type, on_hand_delta, reserved_delta, on_hand_after, reserved_after, reason, created_at]
+      properties:
+        id: {$ref: '#/components/schemas/UUID'}
+        product_id: {$ref: '#/components/schemas/UUID'}
+        sku: {type: string}
+        product_name: {type: string}
+        movement_type: {type: string, enum: [OPENING_BALANCE, RECEIPT, ADJUSTMENT, ORDER_RESERVED, ORDER_RELEASED, ORDER_FULFILLED, REFUND_RESTOCK]}
+        on_hand_delta: {type: integer}
+        reserved_delta: {type: integer}
+        on_hand_after: {type: integer, minimum: 0}
+        reserved_after: {type: integer, minimum: 0}
+        reason: {type: string}
+        created_by_user_id: {type: string, format: uuid, nullable: true}
+        reference_type: {type: string, nullable: true}
+        reference_id: {type: string, format: uuid, nullable: true}
+        created_at: {type: string, format: date-time}
+    InventoryMovementList:
+      type: object
+      required: [items, page, limit, total]
+      properties:
+        items: {type: array, items: {$ref: '#/components/schemas/InventoryMovement'}}
+        page: {type: integer}
+        limit: {type: integer}
+        total: {type: integer, format: int64}
+    CreateOrderRequest:
+      type: object
+      required: [product_id, quantity]
+      properties:
+        product_id: {$ref: '#/components/schemas/UUID'}
+        quantity: {type: integer, minimum: 1, maximum: 10000}
+    CreateOrderResponse:
+      type: object
+      required: [order_id, status, total_amount_paise]
+      properties:
+        order_id: {$ref: '#/components/schemas/UUID'}
+        status: {type: string, enum: [PENDING]}
+        total_amount_paise: {type: integer, format: int64, minimum: 0}
+    OrderItem:
+      type: object
+      required: [product_id, product_name, quantity, unit_price_paise, line_total_paise]
+      properties:
+        product_id: {$ref: '#/components/schemas/UUID'}
+        product_name: {type: string}
+        quantity: {type: integer, minimum: 1}
+        unit_price_paise: {type: integer, format: int64, minimum: 0}
+        line_total_paise: {type: integer, format: int64, minimum: 0}
+    Order:
+      type: object
+      required: [id, status, total_amount_paise, created_at, updated_at, items]
+      properties:
+        id: {$ref: '#/components/schemas/UUID'}
+        status: {type: string, enum: [PENDING, CONFIRMED, CANCELLED, FAILED]}
+        total_amount_paise: {type: integer, format: int64, minimum: 0}
+        created_at: {type: string, format: date-time}
+        updated_at: {type: string, format: date-time}
+        items: {type: array, items: {$ref: '#/components/schemas/OrderItem'}}
+    OrderList:
+      type: object
+      required: [items, page, limit, total]
+      properties:
+        items: {type: array, items: {$ref: '#/components/schemas/Order'}}
+        page: {type: integer}
+        limit: {type: integer}
+        total: {type: integer, format: int64}
+    Payment:
+      type: object
+      required: [id, order_id, provider, status, amount_paise, created_at, updated_at]
+      properties:
+        id: {$ref: '#/components/schemas/UUID'}
+        order_id: {$ref: '#/components/schemas/UUID'}
+        provider: {type: string, example: MOCK}
+        provider_payment_id: {type: string}
+        status: {type: string, enum: [PENDING, SUCCESS, FAILED, REFUNDED]}
+        amount_paise: {type: integer, format: int64, minimum: 0}
+        created_at: {type: string, format: date-time}
+        updated_at: {type: string, format: date-time}
+    MockPaymentCallbackRequest:
+      type: object
+      required: [payment_id, outcome, event_id]
+      properties:
+        payment_id: {$ref: '#/components/schemas/UUID'}
+        outcome: {type: string, enum: [SUCCESS, FAILED]}
+        event_id: {type: string, minLength: 3, maxLength: 200}
+    ReconciliationIssue:
+      type: object
+      required: [issue_type, order_id, order_status, amount_paise, created_at, details]
+      properties:
+        issue_type: {type: string, enum: [STALE_PENDING_PAYMENT, CONFIRMED_ORDER_WITHOUT_SUCCESSFUL_PAYMENT, FAILED_PAYMENT_ORDER_PENDING]}
+        payment_id: {type: string, format: uuid}
+        order_id: {$ref: '#/components/schemas/UUID'}
+        payment_status: {type: string}
+        order_status: {type: string}
+        amount_paise: {type: integer, format: int64}
+        created_at: {type: string, format: date-time}
+        details: {type: string}
+    ReconciliationReport:
+      type: object
+      required: [generated_at, older_than_minutes, issue_count, issues]
+      properties:
+        generated_at: {type: string, format: date-time}
+        older_than_minutes: {type: integer}
+        issue_count: {type: integer}
+        issues: {type: array, items: {$ref: '#/components/schemas/ReconciliationIssue'}}

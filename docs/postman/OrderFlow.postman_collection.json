@@ -1,0 +1,745 @@
+{
+  "info": {
+    "_postman_id": "4a06ac83-9d18-45be-8d6f-1de6b4bdac76",
+    "name": "OrderFlow REST API",
+    "description": "Coursework API collection. Run requests in numeric order. Register/login a customer, log in using a manually promoted local ADMIN account, create a demo product, create an order, initiate mock payment and send the signed mock callback. Secrets are collection variables only; never export or commit populated secrets/tokens.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8080"
+    },
+    {
+      "key": "customerEmail",
+      "value": "of.customer.postman@example.test"
+    },
+    {
+      "key": "customerPassword",
+      "value": "ChangeMe123!"
+    },
+    {
+      "key": "customerToken",
+      "value": ""
+    },
+    {
+      "key": "adminEmail",
+      "value": ""
+    },
+    {
+      "key": "adminPassword",
+      "value": ""
+    },
+    {
+      "key": "adminToken",
+      "value": ""
+    },
+    {
+      "key": "productSku",
+      "value": "OF-POSTMAN-DEMO-001"
+    },
+    {
+      "key": "productId",
+      "value": ""
+    },
+    {
+      "key": "orderId",
+      "value": ""
+    },
+    {
+      "key": "paymentId",
+      "value": ""
+    },
+    {
+      "key": "mockPaymentWebhookSecret",
+      "value": ""
+    },
+    {
+      "key": "eventSuffix",
+      "value": ""
+    },
+    {
+      "key": "failureOrderId",
+      "value": ""
+    },
+    {
+      "key": "failurePaymentId",
+      "value": ""
+    }
+  ],
+  "item": [
+    {
+      "name": "01 — Health",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/health",
+        "description": "Public liveness endpoint."
+      },
+      "response": [],
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('health returns 200', () => pm.response.to.have.status(200));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "02 — Readiness",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/ready",
+        "description": "Requires PostgreSQL to be available."
+      },
+      "response": [],
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('ready returns 200', () => pm.response.to.have.status(200));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "03 — Register customer (run once)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/auth/register",
+        "description": "First run creates the customer; subsequent runs may return 409 because email is unique. Use the login request for later runs.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"{{customerEmail}}\",\n  \"password\": \"{{customerPassword}}\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "response": [],
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('registration created or already exists', () => pm.expect([201,409]).to.include(pm.response.code));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "04 — Customer login",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/auth/login",
+        "description": "Stores access_token into customerToken.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"{{customerEmail}}\",\n  \"password\": \"{{customerPassword}}\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "response": [],
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('login returns token', () => { pm.response.to.have.status(200); const j = pm.response.json(); pm.expect(j.access_token).to.be.a('string'); pm.collectionVariables.set('customerToken', j.access_token); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "05 — Customer profile",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/profile",
+        "description": "Verify bearer authentication.",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{customerToken}}",
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "response": [],
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('profile returns 200', () => pm.response.to.have.status(200));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "06 — Search products",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/products?search=&page=1&limit=20",
+        "description": "Public product search and pagination."
+      },
+      "response": [],
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('product list returns 200', () => pm.response.to.have.status(200));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "07 — Admin login (configure/promote first)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/auth/login",
+        "description": "Populate adminEmail/adminPassword with a dedicated local user that has been promoted to ADMIN in your local development database. Never do this against production just for a demo.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"{{adminEmail}}\",\n  \"password\": \"{{adminPassword}}\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "response": [],
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('admin login returns token', () => { pm.response.to.have.status(200); const j = pm.response.json(); pm.collectionVariables.set('adminToken', j.access_token); pm.expect(j.user.role).to.eql('ADMIN'); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "08 — Admin create demo product",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/products",
+        "description": "Creates a product with opening inventory; saves productId for subsequent requests. Requires a working adminToken.",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{adminToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"sku\": \"{{productSku}}\",\n  \"name\": \"OrderFlow Postman Demo\",\n  \"description\": \"Product created by the Postman collection\",\n  \"price_paise\": 49900,\n  \"initial_stock\": 25\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "response": [],
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('product created', () => { pm.response.to.have.status(201); const j = pm.response.json(); pm.collectionVariables.set('productId', j.id); });"
+            ]
+          }
+        },
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const sku = 'OF-POSTMAN-' + pm.variables.replaceIn('{{$guid}}').replace(/-/g, '').slice(0, 10).toUpperCase();",
+              "pm.collectionVariables.set('productSku', sku);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "09 — Get product inventory",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/inventory/{{productId}}",
+        "description": "Public stock summary for product created in step 08."
+      },
+      "response": [],
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('inventory query returns 200', () => pm.response.to.have.status(200));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "10 — Create order",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/orders",
+        "description": "Stores orderId; requires customer login and product created in step 08.",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{customerToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"product_id\": \"{{productId}}\",\n  \"quantity\": 1\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "response": [],
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('order created', () => { pm.response.to.have.status(201); const j = pm.response.json(); pm.collectionVariables.set('orderId', j.order_id); pm.expect(j.status).to.eql('PENDING'); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "11 — List my orders",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/orders?page=1&limit=20",
+        "description": "Lists only the authenticated customer's orders.",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{customerToken}}",
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "response": [],
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('order list returns 200', () => pm.response.to.have.status(200));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "12 — Get created order",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/orders/{{orderId}}",
+        "description": "Reads the order created in step 10.",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{customerToken}}",
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "response": [],
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('order detail returns 200', () => pm.response.to.have.status(200));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "13 — Initiate mock payment",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Idempotency-Key",
+            "value": "orderflow-payment-{{$guid}}"
+          }
+        ],
+        "url": "{{baseUrl}}/orders/{{orderId}}/payments",
+        "description": "Uses a fresh idempotency key and stores paymentId. Re-run with a stable key manually to demonstrate an idempotent retry.",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{customerToken}}",
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "response": [],
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('payment initiation returns 201', () => { pm.response.to.have.status(201); const j = pm.response.json(); pm.collectionVariables.set('paymentId', j.id); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "14 — Signed payment SUCCESS callback",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "X-Mock-Signature",
+            "value": "sha256={{signatureGeneratedByPreRequest}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/payments/mock-callback",
+        "description": "Mock provider only. Set mockPaymentWebhookSecret. The signature script signs the exact variable-expanded raw JSON body.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"payment_id\": \"{{paymentId}}\",\n  \"outcome\": \"SUCCESS\",\n  \"event_id\": \"evt-{{eventSuffix}}\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "response": [],
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const raw = pm.variables.replaceIn(pm.request.body.raw || '');",
+              "const secret = pm.collectionVariables.get('mockPaymentWebhookSecret');",
+              "if (!secret || secret.length < 32) {",
+              "  throw new Error('Set collection variable mockPaymentWebhookSecret to the same local MOCK_PAYMENT_WEBHOOK_SECRET. Do not share it.');",
+              "}",
+              "pm.collectionVariables.set('eventSuffix', pm.variables.replaceIn('{{$guid}}'));",
+              "const stableRaw = pm.variables.replaceIn(pm.request.body.raw || '');",
+              "const digest = CryptoJS.HmacSHA256(stableRaw, secret).toString(CryptoJS.enc.Hex);",
+              "pm.request.headers.upsert({key: 'X-Mock-Signature', value: 'sha256=' + digest});"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('signed callback accepted', () => pm.response.to.have.status(200));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "15 — Admin payment reconciliation",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/admin/payments/reconciliation?older_than_minutes=15",
+        "description": "Reports stale pending payments and selected order/payment status mismatches.",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{adminToken}}",
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "response": [],
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('reconciliation returns 200', () => pm.response.to.have.status(200));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "16 — Admin inventory movements",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/admin/inventory/movements?product_id={{productId}}&page=1&limit=20",
+        "description": "Audit history for inventory changes; filter by product_id as needed.",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{adminToken}}",
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "response": [],
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('movement page returns 200', () => pm.response.to.have.status(200));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "15 — Create second order for FAILED payment",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/orders",
+        "description": "Creates a second order to exercise the payment-failure path; stores failureOrderId.",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{customerToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"product_id\": \"{{productId}}\",\n  \"quantity\": 1\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "response": [],
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('second order created', () => { pm.response.to.have.status(201); const j = pm.response.json(); pm.collectionVariables.set('failureOrderId', j.order_id); pm.expect(j.status).to.eql('PENDING'); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "16 — Initiate mock payment for failure test",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Idempotency-Key",
+            "value": "orderflow-payment-{{$guid}}"
+          }
+        ],
+        "url": "{{baseUrl}}/orders/{{failureOrderId}}/payments",
+        "description": "Starts the mock payment for the second order; stores failurePaymentId.",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{customerToken}}",
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "response": [],
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('failure payment initiated', () => { pm.response.to.have.status(201); pm.collectionVariables.set('failurePaymentId', pm.response.json().id); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "17 — Signed payment FAILED callback",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "X-Mock-Signature",
+            "value": "sha256={{signatureGeneratedByPreRequest}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/payments/mock-callback",
+        "description": "Exercise failure handling: order should become FAILED and reserved stock should be released once.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"payment_id\": \"{{failurePaymentId}}\",\n  \"outcome\": \"FAILED\",\n  \"event_id\": \"evt-{{eventSuffix}}\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "response": [],
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const raw = pm.variables.replaceIn(pm.request.body.raw || '');",
+              "const secret = pm.collectionVariables.get('mockPaymentWebhookSecret');",
+              "if (!secret || secret.length < 32) {",
+              "  throw new Error('Set collection variable mockPaymentWebhookSecret to the same local MOCK_PAYMENT_WEBHOOK_SECRET. Do not share it.');",
+              "}",
+              "pm.collectionVariables.set('eventSuffix', pm.variables.replaceIn('{{$guid}}'));",
+              "const stableRaw = pm.variables.replaceIn(pm.request.body.raw || '');",
+              "const digest = CryptoJS.HmacSHA256(stableRaw, secret).toString(CryptoJS.enc.Hex);",
+              "pm.request.headers.upsert({key: 'X-Mock-Signature', value: 'sha256=' + digest});"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('signed failure callback accepted', () => pm.response.to.have.status(200)); pm.test('payment is FAILED', () => pm.expect(pm.response.json().status).to.eql('FAILED')); "
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}
