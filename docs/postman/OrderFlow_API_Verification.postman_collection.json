@@ -1,7 +1,7 @@
 {
   "info": {
     "_postman_id": "a8770ef9-669c-4ce8-91d6-6e49c9e3b287",
-    "name": "OrderFlow — Guided Local API Evidence Run (Admin Token Fix)",
+    "name": "OrderFlow API Verification — Local",
     "description": "Guided local-only Postman collection. Run folder 01 through request 05 (Login existing ADMIN) before any product/admin operation. Admin token is stored only when the login response proves role=ADMIN; protected admin requests fail fast otherwise. GET /products is public; POST/PATCH/DELETE /products require ADMIN. Never export/share populated secrets or tokens. Do not use against production.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },

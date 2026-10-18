@@ -136,7 +136,7 @@ Request DTOs currently live next to their relevant HTTP handlers; domain models 
 
 ## Main REST APIs
 
-The full OpenAPI 3.0 contract is `docs/openapi.yaml`; import `docs/postman/OrderFlow_Guided_Evidence.postman_collection.json` into Postman.
+The full OpenAPI 3.0 contract is `docs/openapi.yaml`; import `docs/postman/OrderFlow_API_Verification.postman_collection.json` into Postman.
 
 | Method | Path | Access | Purpose |
 |---|---|---|---|

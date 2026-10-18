@@ -15,6 +15,8 @@ This folder uses real screenshots only. Do not include bearer tokens, passwords,
 
 The original screenshot with `grep DATABASE_URL .env` visibly exposed a local connection URL and password. It is **not included** in the repository patch. If that password was reused outside a disposable local environment, rotate it. GitHub device authorization, Downloads-folder, Scaler form, and ChatGPT-preview screenshots are not application evidence and are not included.
 
+| Public product listing (HTTP 200) | `postman/initial/08-product-list-public-200.png` | `GET /products?page=1&limit=20` returned 200 with one active product; endpoint is public. |
+
 ## Remaining screenshots: take these after final local test and green CI
 
 | Sequence | Test to perform | Save as | Report placement |
@@ -50,4 +52,3 @@ OrderFlow is a **modular monolith**, not a microservices system. The HTTP APIs a
 User-supplied initial Postman screenshots are preserved under `docs/evidence/postman/initial/`. The login screenshot is redacted; the original displayed an active JWT and is intentionally not included. The 401/403 product-create screenshots are troubleshooting history, not successful CRUD evidence. See `docs/postman/POSTMAN_ADMIN_TOKEN_TROUBLESHOOTING.md`.
 
 Important distinction: `GET /products` is public and expected to return `200`. `POST/PATCH/DELETE /products` require a valid ADMIN token. An empty `adminToken` produces `401 bearer token required`; a valid CUSTOMER token produces `403 insufficient permissions`. Run the collection's existing-ADMIN login request and verify `user.role == ADMIN` before admin operations.
-

@@ -8,7 +8,7 @@
 
 ## Correct sequence
 
-1. Open **OrderFlow — Guided Local API Evidence Run (Admin Token Fix)** in Postman.
+1. Open **OrderFlow API Verification — Local** in Postman.
 2. Open folder **01 — Authentication and RBAC** and run requests top-to-bottom.
 3. Run **01 Register CUSTOMER**, then **02 Login CUSTOMER**. The collection saves `customerToken`.
 4. Run **05 Login existing ADMIN**. Do not continue until the request returns `200 OK`, the response's `user.role` is `ADMIN`, and the test `admin token saved only after role verification` passes.

@@ -22,9 +22,9 @@ Both should return `HTTP/1.1 200 OK`. If port 8080 is already in use, do not sta
 
 ## 1. Import collection
 
-1. Download `OrderFlow_Guided_Evidence.postman_collection.json` from this folder.
+1. Download `OrderFlow_API_Verification.postman_collection.json` from this folder.
 2. Open Postman → **Import** → select the JSON file.
-3. Expand the collection **OrderFlow — Guided Local API Evidence Run (Admin Token Fix)**.
+3. Expand the collection **OrderFlow API Verification — Local**.
 4. Open the collection's **Variables**. The `baseUrl` should be `http://localhost:8080`.
 5. The default admin credentials are the local test user previously used in this repo (`of.admin.test.20261018@example.com`). If the login request fails, update `adminEmail` and `adminPassword` in Postman's **Current value** to the existing ADMIN account in your local `orderflow` database. Do not paste credentials into chat or commit populated values.
 6. For signed webhook requests, set `mockPaymentWebhookSecret` in Postman's **Current value** to the exact local `MOCK_PAYMENT_WEBHOOK_SECRET` from `.env`. Keep it local; never share screenshots showing it, export populated secrets, or commit it. It must be at least 32 characters.
@@ -112,7 +112,7 @@ After saving screenshots, inspect the staged diff before commit:
 ```bash
 git status --short
 git diff --check
-git add docs/evidence/postman docs/postman/OrderFlow_Guided_Evidence.postman_collection.json docs/postman/ORDERFLOW_POSTMAN_ATOMIC_STEPS.md
+git add docs/evidence/postman docs/postman/OrderFlow_API_Verification.postman_collection.json docs/postman/ORDERFLOW_POSTMAN_ATOMIC_STEPS.md
 git diff --cached --check
 git diff --cached --stat
 ```
