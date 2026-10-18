@@ -504,6 +504,79 @@ paths:
         '400': {$ref: '#/components/responses/BadRequest'}
         '401': {$ref: '#/components/responses/Unauthorized'}
         '403': {$ref: '#/components/responses/Forbidden'}
+  /metrics:
+    get:
+      tags: [Operations]
+      summary: Request counter and latency histogram metrics
+      security: []
+      responses:
+        '200':
+          description: Prometheus text exposition format
+          content:
+            text/plain:
+              schema: {type: string}
+  /admin/mock-provider/payments/{id}/outcome:
+    post:
+      tags: [Administration]
+      summary: Set a simulated provider outcome without delivering a callback (development only)
+      description: Requires ADMIN JWT and is disabled when APP_ENV=production. This is a local test hook, not a real gateway API.
+      security: [{BearerAuth: []}]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: {$ref: '#/components/schemas/UUID'}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [outcome, amount_paise, currency]
+              properties:
+                outcome: {type: string, enum: [SUCCESS, FAILED]}
+                amount_paise: {type: integer, format: int64, minimum: 0}
+                currency: {type: string, minLength: 3, maxLength: 3, example: INR}
+                failure_reason: {type: string, minLength: 3}
+      responses:
+        '200':
+          description: Simulated provider-side outcome stored; OrderFlow payment remains pending until reconciliation
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/MockProviderOutcome'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+  /admin/payments/reconciliation/run:
+    post:
+      tags: [Administration]
+      summary: Recover known terminal simulated-provider outcomes
+      description: Uses the same validated payment transition path as a signed callback; not a live gateway integration.
+      security: [{BearerAuth: []}]
+      parameters:
+        - in: query
+          name: older_than_minutes
+          schema: {type: integer, minimum: 0, maximum: 10080, default: 0}
+        - in: query
+          name: limit
+          schema: {type: integer, minimum: 1, maximum: 1000, default: 100}
+      responses:
+        '200':
+          description: Number of provider outcomes applied to still-pending OrderFlow payments
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [recovered_count, older_than_minutes, limit]
+                properties:
+                  recovered_count: {type: integer, minimum: 0}
+                  older_than_minutes: {type: integer}
+                  limit: {type: integer}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
 components:
   securitySchemes:
     BearerAuth:
@@ -561,6 +634,17 @@ components:
         application/json:
           schema: {$ref: '#/components/schemas/StatusResponse'}
   schemas:
+    MockProviderOutcome:
+      type: object
+      required: [payment_id, provider_payment_id, outcome, amount_paise, currency, updated_at]
+      properties:
+        payment_id: {$ref: '#/components/schemas/UUID'}
+        provider_payment_id: {type: string}
+        outcome: {type: string, enum: [PENDING, SUCCESS, FAILED]}
+        amount_paise: {type: integer, format: int64, minimum: 0}
+        currency: {type: string, minLength: 3, maxLength: 3}
+        failure_reason: {type: string}
+        updated_at: {type: string, format: date-time}
     UUID:
       type: string
       format: uuid

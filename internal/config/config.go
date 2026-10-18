@@ -68,7 +68,7 @@ func Load() (Config, error) {
 	if err != nil {
 		return Config{}, err
 	}
-	redisEnabled, err := strconv.ParseBool(getEnv("REDIS_ENABLED", "true"))
+	redisEnabled, err := strconv.ParseBool(getEnv("REDIS_ENABLED", "false"))
 	if err != nil {
 		return Config{}, fmt.Errorf("REDIS_ENABLED must be true or false")
 	}

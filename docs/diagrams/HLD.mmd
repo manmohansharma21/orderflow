@@ -1,15 +1,14 @@
 flowchart LR
-    U[Client / Postman] -->|HTTP JSON| R[Gin Router]
-    R --> H[HTTP handlers and request DTOs]
-    H --> A[JWT authentication / role checks]
-    A --> S[Service layer]
-    S --> P[Repository layer]
-    P --> DB[(PostgreSQL - source of truth)]
-    S -. best-effort product reads .-> C[(Redis cache with TTL and versioned invalidation)]
-    M[Product create/update/deactivate] -->|increment cache generation| C
-    WH[HMAC-signed mock payment callback] --> PH[Payment handler]
-    PH --> PS[Payment service]
-    PS --> PR[Payment repository]
-    PR --> DB
-    W[Periodic read-only reconciliation worker] --> PS
-    DB --- IM[Inventory movement audit]
+    Client[Customer/Admin client or Postman] -->|JSON + Bearer JWT| Gin[Gin REST API]
+    MockProvider[Simulated provider state] -->|Outcome becomes SUCCESS/FAILED| ProviderLedger[(mock_provider_transactions)]
+    Gin --> Middleware[Request validation, request ID, role checks]
+    Middleware --> Handlers[Handlers and HTTP DTOs]
+    Handlers --> Services[Order, product, inventory and payment services]
+    Services --> Repositories[pgx repositories / transactions]
+    Repositories --> DB[(PostgreSQL: source of truth)]
+    DB --> Audit[Inventory movement audit]
+    Services -. best-effort catalog cache .-> Redis[(Optional Redis with TTL/invalidation)]
+    Worker[Periodic expiry + reconciliation workers] --> Services
+    Worker --> DB
+    Gin --> Metrics[/metrics: request counters + latency histogram/]
+    CI[GitHub Actions: migrations, tests, race, vet, Docker smoke] -. validates commit .-> Gin

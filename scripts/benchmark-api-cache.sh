@@ -52,6 +52,7 @@ trap cleanup EXIT
 
 docker compose up -d postgres redis
 ./scripts/apply-reliability-migration.sh
+./scripts/apply-mock-provider-migration.sh
 redis_ready=0
 for _ in $(seq 1 30); do
   if docker exec orderflow-redis redis-cli ping 2>/dev/null | grep -q PONG; then redis_ready=1; break; fi

@@ -2,13 +2,13 @@
 
 **Technology:** Go 1.26, Gin, PostgreSQL, `pgx`, JWT, bcrypt, SQL migrations
 **Repository:** `https://github.com/manmohansharma21/orderflow`
-**Report scope:** implementation present at remote-review commit `8ffd04e`, plus documentation and CI artifacts proposed in this bundle.
+**Report scope:** OrderFlow implementation in the current repository, including reliability migration `000007`, multi-product/idempotent order creation, inventory/payment transitions, Redis catalog cache, admin reports, Docker and CI. Replace the final commit SHA with the exact submitted SHA after the last verification run.
 
 ## 1. Abstract
 
 OrderFlow is a backend API demonstrating core e-commerce flows: user registration/authentication, product administration, inventory management, transactional order creation, mock payments and payment/order reconciliation. The system is layered into HTTP handlers, services, repositories and domain types. PostgreSQL provides durable storage, transactions, conditional stock reservation and row-level locking. Inventory movements are recorded for auditability, and payment initiation/callback processing is designed to tolerate duplicate requests.
 
-The current integration tests exercise core order/payment flows, rollback behavior and concurrent requests against a dedicated PostgreSQL test database. Live Stripe processing, Redis caching and cloud deployment are future work and are not represented as completed features in this report.
+The integration tests exercise order/payment workflows, rollback behavior, concurrent requests, Redis TTL/invalidation, and periodic worker behavior against disposable dependencies. The provider is simulated, not Stripe. AWS resources are not represented as deployed unless provisioned and verified separately.
 
 ## 2. Problem statement and goals
 
@@ -121,7 +121,7 @@ Money is stored as integer paise. The database constrains prices/amounts and inv
 
 ## 9. Verification evidence
 
-The prior integration milestone was green at commit `8ffd04e`. This bundle adds Redis and worker tests; the updated CI must pass before reporting these changes as verified. The CI workflow is configured to provide disposable PostgreSQL and Redis services, perform migrations, run tests and race checks, build the image, and probe health/readiness inside the running container.
+Commit `d891056` has a successful GitHub Actions run including the migration chain, unit/database/Redis tests, integration race tests, vet, Docker build and runtime health/readiness probes. Any additional final-review patch must receive a new green run before it is described as verified.
 
 Prior owner-run test commands were:
 
@@ -145,7 +145,7 @@ The PostgreSQL integration suite covers order stock reservation/audit movements,
 
 ## 11. Limitations and further work
 
-1. **Redis:** optional product list/detail cache with TTL and versioned invalidation is included in this milestone. Treat it as verified only after updated CI reports green.
+1. **Redis:** product list/detail cache with TTL and generation-based invalidation is implemented. The latest measured small local API workload was slower with the warm Redis cache, so Redis is disabled by default pending a representative benchmark that demonstrates benefit.
 2. **Payment gateway:** provider remains a mock; production Stripe/other provider integration, provider-native signature verification, retries and provider reconciliation require separate implementation and credentials.
 3. **Scheduled reconciliation:** configurable read-only worker periodically emits the existing report to logs. It does not automatically change orders or payments. Confirm whether the rubric expects a cron/worker or only reconciliation logic.
 4. **Cloud deployment:** no AWS resources have been provisioned or evidenced. The AWS deployment guide is a plan, not proof of deployment.
@@ -154,7 +154,7 @@ The PostgreSQL integration suite covers order stock reservation/audit movements,
 
 ## 12. Conclusion
 
-OrderFlow implements the central backend path from product and inventory through transactional order creation and mock payment state changes, with a layered Go design and PostgreSQL-backed correctness controls. The next steps are to validate the added OpenAPI/CI/container/documentation files, capture submission evidence, and decide from the rubric whether Redis, live payment processing, scheduled reconciliation and AWS deployment must be completed before submission.
+OrderFlow implements the core product, inventory, multi-product order, idempotency, mock-payment, cancellation, expiry and reporting workflows with PostgreSQL-backed correctness controls. The local provider-recovery demo and HTTP observability additions must pass the final local test suite and a CI run on the submitted SHA. Live Stripe is outside the initial simulated-provider scope; AWS deployment depends on the evaluation rubric and actual resource approval.
 
 
 ## Reliability features added in the final code overlay (verification required)
@@ -165,4 +165,4 @@ Payment callbacks sent to the HTTP API include amount and currency. The callback
 
 A periodic expiry worker releases reservations only for old PENDING orders with no PENDING or SUCCESS payment. Orders with unresolved payments are intentionally excluded because a delayed provider notification could indicate a charge already occurred. Scheduled payment reconciliation remains read-only for the mock provider until a provider status-lookup contract exists. Admin reports expose order status totals, date-filtered sales/payment sums and inventory/low-stock totals.
 
-`BenchmarkProductListDatabaseVsRedis` compares uncached PostgreSQL product listing to a warmed Redis hit. The final results section must include the actual `go test -bench` output and hardware/database details; no numerical improvement is claimed before a repeatable benchmark is run. AWS architecture is documented but a real deployment must be separately approved, performed and verified.
+`BenchmarkProductListDatabaseVsRedis` compares PostgreSQL reads to warm Redis hits. In the supplied local API run (300 requests per variant, 10 concurrent workers, Apple M2, Go 1.27.2, Docker 29.8.2), cache disabled produced P50 2.480 ms, P95 4.270 ms, mean 3.315 ms and 2821.81 requests/s; warm Redis produced P50 4.447 ms, P95 13.966 ms, mean 5.702 ms and 1697.92 requests/s. Redis was slower for this workload; no improvement is claimed. The AWS diagram is a target design, not evidence of live deployment.

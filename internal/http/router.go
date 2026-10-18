@@ -8,6 +8,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/manmohansharma21/orderflow/internal/observability"
 	"github.com/manmohansharma21/orderflow/internal/repository"
 	"github.com/manmohansharma21/orderflow/internal/service"
 )
@@ -24,7 +25,9 @@ func NewRouterWithProductCache(pool databasePinger, readinessTimeoutSeconds int,
 
 func newRouter(pool databasePinger, readinessTimeoutSeconds int, productCache service.ProductCache, productCacheTTL time.Duration) *gin.Engine {
 	router := gin.New()
-	router.Use(gin.Logger(), gin.Recovery())
+	metrics := observability.NewHTTPMetrics()
+	router.Use(gin.Logger(), gin.Recovery(), metrics.Middleware())
+	router.GET("/metrics", metrics.Handler())
 	router.GET("/health", func(c *gin.Context) { c.JSON(http.StatusOK, gin.H{"status": "ok"}) })
 	router.GET("/ready", func(c *gin.Context) {
 		ctx, cancel := context.WithTimeout(c.Request.Context(), time.Duration(readinessTimeoutSeconds)*time.Second)
@@ -54,6 +57,9 @@ func newRouter(pool databasePinger, readinessTimeoutSeconds int, productCache se
 		router.POST("/orders/:id/payments", AuthRequired(), payments.createForOrder)
 		router.POST("/payments/mock-callback", payments.mockCallback)
 		router.GET("/admin/payments/reconciliation", AuthRequired(), RequireRole("ADMIN"), payments.reconciliation)
+		mockProvider := newMockProviderHandler(paymentService)
+		router.POST("/admin/mock-provider/payments/:id/outcome", AuthRequired(), RequireRole("ADMIN"), mockProvider.setOutcome)
+		router.POST("/admin/payments/reconciliation/run", AuthRequired(), RequireRole("ADMIN"), mockProvider.recoverKnownOutcomes)
 		reportService := service.NewReportService(repository.NewReportRepository(dbPool))
 		reports := newReportHandler(reportService)
 		router.GET("/admin/reports/orders", AuthRequired(), RequireRole("ADMIN"), reports.orders)

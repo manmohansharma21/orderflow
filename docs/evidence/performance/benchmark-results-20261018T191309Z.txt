@@ -1,0 +1,18 @@
+OrderFlow product-list API benchmark (actual user-run local measurements)
+UTC timestamp: 2026-10-18T19:13:09Z
+Environment: Darwin XCM06M2T2G 24.6.0 Darwin Kernel Version 24.6.0; Apple M2 arm64
+Go: go version go1.27.2 darwin/arm64
+Docker: Docker version 29.8.2, build 7fc2dff
+Requests per variant: 300; concurrent workers: 10
+Endpoint: GET /products?page=1&limit=20; test dataset was the current local DB
+Cache TTL: 60 seconds; Redis DB: 0; workers disabled during measurement
+
+[PostgreSQL / Redis cache disabled]
+attempted=300 successful=300 errors=0 elapsed_seconds=0.106
+p50_ms=2.480 p95_ms=4.270 mean_ms=3.315 throughput_rps=2821.81
+
+[PostgreSQL / Redis cache enabled (warm cache)]
+attempted=300 successful=300 errors=0 elapsed_seconds=0.177
+p50_ms=4.447 p95_ms=13.966 mean_ms=5.702 throughput_rps=1697.92
+
+Interpretation: Redis was slower for this particular small local workload; no performance improvement is claimed. Redis remains optional and should only be enabled after a representative workload benchmark demonstrates benefit.

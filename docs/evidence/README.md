@@ -2,7 +2,7 @@
 
 Create these folders under `docs/evidence/`. Capture real results only; do not fabricate screenshots or include tokens, credentials, `.env` values, webhook signatures, or AWS account-sensitive information. PNG is preferred. Use a demo account and redact any bearer token before saving.
 
-| When to capture | Exact suggested filename | Where to paste in `submission/OrderFlow_Applied_Software_Project_Report_DRAFT.docx` |
+| When to capture | Exact suggested filename | Where to paste in the local final Word report copy (the PDF is submitted separately) |
 |---|---|---|
 | After the residual bundle passes locally and GitHub Actions is green on the same commit SHA | `docs/evidence/ci/01-github-actions-green.png` | Chapter 14, Docker/CI verification; cite the commit SHA below the figure |
 | Immediately after the local Docker smoke script succeeds | `docs/evidence/docker/01-health-readiness.png` | Chapter 14; show successful image/container and `/health`, `/ready` responses only |
@@ -12,7 +12,7 @@ Create these folders under `docs/evidence/`. Capture real results only; do not f
 | After order creation, list/detail and cancellation | `docs/evidence/postman/04-order-lifecycle.png` | Chapters 8–9, transaction and lifecycle |
 | After signed payment success, failure, invalid signature and callback replay | `docs/evidence/postman/05-payment-callbacks.png` | Chapter 10; make sure the displayed result matches the final code and specification |
 | After running the configured reconciliation process and endpoint | `docs/evidence/postman/06-reconciliation.png` | Chapter 10, payment recovery |
-| Only after running a repeatable load test both before and after cache/index changes | `docs/evidence/performance/01-baseline.png` and `02-cached.png` | Chapter 13; report environment, data size, request count, concurrency, duration, p50/p95, throughput and errors |
+| Only after running a repeatable load test both before and after cache/index changes | `docs/evidence/performance/01-baseline.png` and `02-redis-result.png` (the Redis result may be slower; report the actual result) | Chapter 13; report environment, data size, request count, concurrency, duration, p50/p95, throughput and errors |
 | After confirming Mermaid diagrams render on the pushed README | `docs/evidence/architecture/01-hld-lld-rendered.png` | Chapters 4–6; diagram sources remain in `docs/diagrams/` |
 | Only after an actual AWS deployment has been approved, launched and verified | `docs/evidence/aws/01-live-health.png` | Chapter 15; redact account IDs, public/private secrets and security-sensitive details |
 
@@ -28,3 +28,11 @@ This completion overlay changes successful payment to consume on-hand and reserv
 
 ## CI learning checklist
 Read `.github/workflows/ci.yml` top to bottom: trigger, permissions, service containers and health checks, environment variables, checkout, Go setup, `go mod tidy` consistency check, migration loop, unit/integration tests, race tests, `go vet`, whitespace check, Docker build, container smoke test and health/readiness curl probes. After the Redis/worker bundle is committed, capture only the green run for that exact HEAD SHA.
+
+## Final reliability additions
+
+- [ ] Multi-product order creates one order with all item snapshots and reserves every line atomically.
+- [ ] Same order idempotency key replays the original result; changed payload returns 409.
+- [ ] Mock provider outcome is set without delivering a callback, then `POST /admin/payments/reconciliation/run?older_than_minutes=0` recovers it through the callback transition path.
+- [ ] `X-Request-ID` appears in HTTP responses and `GET /metrics` returns request counters/histogram.
+- [ ] Benchmark outputs for product API, order creation and order-history listing are saved with hardware/workload details; do not omit negative cache results.

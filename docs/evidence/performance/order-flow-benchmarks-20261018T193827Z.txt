@@ -1,0 +1,15 @@
+OrderFlow service-level order creation/history benchmarks (actual run)
+UTC timestamp: 2026-10-18T19:38:27Z
+Environment: Darwin XCM06M2T2G 24.6.0 Darwin Kernel Version 24.6.0: Mon Jul 14 11:30:51 PDT 2025; root:xnu-11417.140.69~1/RELEASE_ARM64_T8112 arm64
+Go: go version go1.27.2 darwin/arm64
+Database: dedicated orderflow_test; benchmarks create isolated fixtures and clean them up.
+These are service/repository-path ns/op benchmarks, not HTTP P95 measurements.
+
+goos: darwin
+goarch: arm64
+pkg: github.com/manmohansharma21/orderflow/internal/integration
+cpu: Apple M2
+BenchmarkOrderCreation-8      	     646	   2556068 ns/op	    5865 B/op	     114 allocs/op
+BenchmarkOrderCreation-8      	     304	   3469445 ns/op	    5856 B/op	     112 allocs/op
+BenchmarkOrderCreation-8      	     471	   2295268 ns/op	    5857 B/op	     113 allocs/op
+BenchmarkOrderHistoryList-8   	

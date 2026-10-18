@@ -2,7 +2,7 @@
 
 OrderFlow is a REST backend for a small e-commerce/order-processing workflow. It is written in Go with Gin, PostgreSQL and `pgx`. The current payment gateway is deliberately a **mock provider** with an HMAC-signed callback; this repository does not yet contain a live Stripe integration or an AWS deployment.
 
-> **Implementation milestone:** Redis product-read caching, TTL-based expiration, versioned invalidation, a periodic reconciliation reporter, and a Docker runtime smoke test are included in this change bundle. They must pass the repository workflow after the bundle is committed; do not treat a local ZIP as proof of a green CI run.
+> **Verified baseline:** commit `d891056` passed GitHub Actions, including migrations, tests, race checks, vet, Docker build and runtime health/readiness. The final-review overlay adds mock-provider recovery and HTTP observability; it must pass a new local test run and CI before submission.
 
 ## What is implemented
 
@@ -13,7 +13,7 @@ OrderFlow is a REST backend for a small e-commerce/order-processing workflow. It
 - Mock payment initiation with idempotency keys, HMAC-SHA256 callback validation, replay-safe status transitions, and an admin reconciliation report.
 - Health/readiness endpoints and PostgreSQL-backed integration tests, including concurrent order/payment scenarios.
 - Optional Redis-backed product list/detail cache with a 60-second default TTL and generation-based invalidation after product create/update/deactivation.
-- Configurable read-only reconciliation worker that periodically logs stale pending payments or inconsistent order/payment states.
+- Scheduled mock-provider reconciliation that recovers known terminal outcomes through the shared callback path and logs remaining inconsistent states; real gateway recovery is out of scope.
 - CI now tests a disposable PostgreSQL database and Redis, builds the Docker image, and smoke-tests `/health` and `/ready` inside the container.
 
 ## Architecture at a glance (HLD)
@@ -39,7 +39,7 @@ flowchart LR
     DB --- IM[Inventory Movement Audit]
 ```
 
-The Redis cache is optional and fail-open: PostgreSQL remains the source of truth. The scheduled reconciliation worker is read-only and reports issues to application logs; it does not automatically settle payments. This diagram represents source structure, not a claim that the system is deployed to AWS. The editable diagram sources are in [`docs/diagrams/HLD.mmd`](docs/diagrams/HLD.mmd) and [`docs/diagrams/LLD.mmd`](docs/diagrams/LLD.mmd).
+The Redis cache is optional and fail-open: PostgreSQL remains the source of truth. The scheduled worker recovers known terminal outcomes from the separate simulated-provider ledger through the same validated callback transition path, then reports remaining stale/inconsistent states to application logs. It does not integrate with a live gateway. This diagram represents source structure, not a claim that the system is deployed to AWS. The editable diagram sources are in [`docs/diagrams/HLD.mmd`](docs/diagrams/HLD.mmd) and [`docs/diagrams/LLD.mmd`](docs/diagrams/LLD.mmd).
 
 ## Low-level design (LLD)
 
@@ -88,7 +88,8 @@ stateDiagram-v2
 | `migrations` | Versioned SQL schema changes |
 | `internal/integration` | Real PostgreSQL integration and concurrency tests (including optional Redis invalidation test) |
 | `internal/cache` | Redis adapter for product read caching |
-| `internal/worker` | Periodic read-only payment reconciliation reporting |
+| `internal/observability` | Request IDs, request counters and HTTP latency histogram at `/metrics` |
+| `internal/worker` | Scheduled provider-outcome recovery, unpaid-order expiry and reconciliation reporting |
 
 The existing code already has domain models, request DTO structs (private to the relevant HTTP handler files), repository implementations and services. A separate DTO package is not required for correctness; creating duplicate model/DTO/repository layers would add indirection without adding functionality. See [`docs/DESIGN_PATTERNS.md`](docs/DESIGN_PATTERNS.md) for code-reading guidance.
 
@@ -243,3 +244,46 @@ The reliability overlay additionally supports multi-product order requests, orde
 Apply new schema changes once to both your local development DB and the dedicated test DB by following `docs/RESIDUAL_MILESTONE.md`. Never point `ORDERFLOW_TEST_DATABASE_URL` at `orderflow` or production. The current payment integration is deliberately a mock provider; a real provider lookup is needed before reconciliation can automatically repair a missed callback.
 
 Admin reporting is available at `GET /admin/reports/orders`, `GET /admin/reports/sales` and `GET /admin/reports/inventory`; all require an ADMIN bearer token.
+
+## Final HLD/LLD after reliability update
+
+The editable diagram sources are in `docs/diagrams/HLD.mmd`, `docs/diagrams/LLD.mmd`, and `docs/diagrams/ORDER_PAYMENT_STATE.mmd`. These diagrams include the simulated-provider ledger, request metrics, and the callback-recovery path.
+
+### Current HLD
+```mermaid
+flowchart LR
+    Client[Customer / ADMIN / Postman] --> API[Gin REST API]
+    API --> Request[Request ID, DTO validation, JWT/roles]
+    Request --> Services[Product / Order / Inventory / Payment services]
+    Services --> PostgreSQL[(PostgreSQL source of truth)]
+    Services -. optional catalog cache .-> Redis[(Redis, TTL + invalidation)]
+    PostgreSQL --> ProviderLedger[(Mock provider outcome ledger)]
+    Worker[Expiry + provider reconciliation workers] --> Services
+    API --> Metrics[/metrics: request counts + duration histogram/]
+    CI[GitHub Actions] -. tests and container smoke .-> API
+```
+
+### Current LLD: missed callback recovery
+```mermaid
+sequenceDiagram
+    participant P as Mock provider ledger
+    participant W as Reconciliation worker
+    participant S as Payment service
+    participant R as Payment repository
+    participant DB as PostgreSQL
+    P-->>W: Known SUCCESS/FAILED outcome
+    W->>S: ReconcileKnownMockProviderOutcomes
+    S->>S: Reuse ProcessMockCallback validation/state path
+    S->>R: Lock and apply payment/order/stock transition
+    R->>DB: Commit status + movement audit atomically
+    S-->>W: Recovered count / error
+```
+
+## Final verification and submission
+
+- [Mock-provider recovery and HTTP observability](docs/MOCK_PROVIDER_RECOVERY_AND_OBSERVABILITY.md)
+- [Submission portal checklist](docs/FINAL_SUBMISSION_GUIDE.md)
+- [Evidence and screenshot checklist](docs/evidence/README.md)
+- HLD and LLD source diagrams are maintained in `docs/diagrams/`; the rendered diagrams are also included below in this README.
+
+`GET /metrics` exposes request counters and a duration histogram. `X-Request-ID` is returned on every HTTP response. Redis remains optional and defaults off because the latest local product-list benchmark was slower with the warm cache; do not claim a cache speedup without a new representative benchmark.

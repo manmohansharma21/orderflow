@@ -12,6 +12,7 @@ command -v docker >/dev/null || { echo "ERROR: Docker is required for the Redis-
 
 docker compose up -d postgres redis
 ./scripts/apply-reliability-migration.sh
+./scripts/apply-mock-provider-migration.sh
 export ORDERFLOW_REDIS_TEST_ADDR="${ORDERFLOW_REDIS_TEST_ADDR:-localhost:6379}"
 
 go mod tidy

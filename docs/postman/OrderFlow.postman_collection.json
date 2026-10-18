@@ -95,6 +95,26 @@
       "key": "failurePaymentCurrency",
       "value": "INR",
       "type": "string"
+    },
+    {
+      "key": "recoveryOrderId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "recoveryPaymentId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "recoveryPaymentAmountPaise",
+      "value": "0",
+      "type": "string"
+    },
+    {
+      "key": "recoveryPaymentCurrency",
+      "value": "INR",
+      "type": "string"
     }
   ],
   "item": [
@@ -863,6 +883,188 @@
         "description": "ADMIN-only reporting endpoint."
       },
       "response": []
+    },
+    {
+      "name": "Missed callback reconciliation demo",
+      "description": "Run after login as a customer and admin, and after a product with stock exists. This deliberately simulates a provider outcome without sending the webhook; the recovery endpoint applies the same transition path.",
+      "item": [
+        {
+          "name": "1 - Create recovery order",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{customerToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{$guid}}"
+              }
+            ],
+            "url": "{{baseUrl}}/orders",
+            "description": "Creates a fresh one-product order and stores its ID and exact server-calculated total.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"items\": [{\"product_id\": \"{{productId}}\", \"quantity\": 1}]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"order created\", () => pm.response.to.have.status(201));",
+                  "const body = pm.response.json();",
+                  "pm.collectionVariables.set(\"recoveryOrderId\", body.order_id);",
+                  "pm.collectionVariables.set(\"recoveryPaymentAmountPaise\", String(body.total_amount_paise));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "2 - Initiate recovery payment",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{customerToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{$guid}}"
+              }
+            ],
+            "url": "{{baseUrl}}/orders/{{recoveryOrderId}}/payments",
+            "description": "Creates a pending mock payment; do not send its regular callback in this recovery scenario."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"payment attempt created\", () => pm.response.to.have.status(201));",
+                  "const body = pm.response.json();",
+                  "pm.collectionVariables.set(\"recoveryPaymentId\", body.id);",
+                  "pm.collectionVariables.set(\"recoveryPaymentAmountPaise\", String(body.amount_paise));",
+                  "pm.collectionVariables.set(\"recoveryPaymentCurrency\", body.currency || \"INR\");"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "3 - Set provider outcome without callback",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/admin/mock-provider/payments/{{recoveryPaymentId}}/outcome",
+            "description": "Development-only ADMIN route; it updates simulated provider state, not OrderFlow payment state.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"outcome\": \"SUCCESS\",\n  \"amount_paise\": {{recoveryPaymentAmountPaise}},\n  \"currency\": \"{{recoveryPaymentCurrency}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"provider outcome stored\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"this only changes the simulated provider ledger\", () => pm.expect(pm.response.json().outcome).to.eql(\"SUCCESS\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "4 - Run reconciliation immediately",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/admin/payments/reconciliation/run?older_than_minutes=0&limit=100",
+            "description": "Uses the same processing path as a signed callback to confirm the order and consume reserved stock."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"reconciliation succeeded\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"one payment recovered\", () => pm.expect(pm.response.json().recovered_count).to.be.at.least(1));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "5 - Verify recovered order",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{customerToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/orders/{{recoveryOrderId}}",
+            "description": "Confirms that the missed successful callback was recovered."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"recovered order is confirmed\", () => { pm.response.to.have.status(200); pm.expect(pm.response.json().status).to.eql(\"CONFIRMED\"); });"
+                ]
+              }
+            }
+          ]
+        }
+      ]
     }
   ]
 }

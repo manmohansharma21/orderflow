@@ -10,9 +10,9 @@ Environment variables: `REDIS_ENABLED`, `REDIS_ADDR`, `REDIS_PASSWORD`, `REDIS_D
 
 ## Scheduled reconciliation
 
-`internal/worker/payment_reconciliation.go` periodically calls the already-existing `PaymentService.ReconciliationReport` and logs each stale/inconsistent record. `RECONCILIATION_INTERVAL_SECONDS` defaults to 300; setting it to 0 disables the worker. `RECONCILIATION_OLDER_THAN_MINUTES` defaults to 15.
+`internal/worker/payment_reconciliation.go` periodically checks the simulated-provider ledger for known terminal outcomes on still-pending payments, applies them through the same callback transition path, then logs remaining stale/inconsistent records from `PaymentService.ReconciliationReport`. `RECONCILIATION_INTERVAL_SECONDS` defaults to 300; setting it to 0 disables the worker. `RECONCILIATION_OLDER_THAN_MINUTES` defaults to 15.
 
-The worker is intentionally **read-only**. It does not decide whether a gateway payment succeeded, retry charges, refund customers, or mutate status automatically. A production integration should rely on authoritative provider APIs/webhooks and an explicit remediation workflow.
+The recovery logic is for the simulated provider only. It does not query a live gateway, initiate charges, or refund money. Production provider reconciliation must rely on the authoritative provider API/webhooks and an explicit remediation workflow. The development-only ADMIN endpoint can simulate a provider result without delivering the callback; it returns 404 when `APP_ENV=production`.
 
 ## Test configuration
 

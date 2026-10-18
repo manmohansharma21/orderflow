@@ -13,6 +13,10 @@ type ReconciliationReporter interface {
 	ReconciliationReport(context.Context, int) (domain.PaymentReconciliationReport, error)
 }
 
+type MockProviderOutcomeRecoverer interface {
+	ReconcileKnownMockProviderOutcomes(context.Context, int, int) (int, error)
+}
+
 // RunPeriodicReconciliation is read-only: it emits detected inconsistencies to
 // the application logger; it does not modify payment/order state automatically.
 func RunPeriodicReconciliation(ctx context.Context, reporter ReconciliationReporter, interval time.Duration, olderThanMinutes int, logger *log.Logger) {
@@ -27,6 +31,14 @@ func RunPeriodicReconciliation(ctx context.Context, reporter ReconciliationRepor
 			return
 		case <-ticker.C:
 			runCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+			if recoverer, ok := reporter.(MockProviderOutcomeRecoverer); ok {
+				recovered, recoverErr := recoverer.ReconcileKnownMockProviderOutcomes(runCtx, olderThanMinutes, 100)
+				if recoverErr != nil {
+					logger.Printf("ERROR mock-provider outcome recovery failed: %v", recoverErr)
+				} else if recovered > 0 {
+					logger.Printf("mock-provider reconciliation recovered_count=%d older_than_minutes=%d", recovered, olderThanMinutes)
+				}
+			}
 			report, err := reporter.ReconciliationReport(runCtx, olderThanMinutes)
 			cancel()
 			if err != nil {

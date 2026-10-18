@@ -26,3 +26,6 @@ temp/
 
 # Local generated report drafts are not submission-ready
 submission/*_DRAFT.*
+
+# Generated submission report drafts (upload the final PDF separately)
+submission/*DRAFT.*

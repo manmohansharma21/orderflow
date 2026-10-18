@@ -1,24 +1,28 @@
 sequenceDiagram
     autonumber
-    participant C as Client
-    participant H as Order HTTP handler
+    participant C as Customer client
+    participant H as Order handler/DTO
     participant S as Order service
     participant R as Order repository
     participant DB as PostgreSQL
-    C->>H: POST /orders (product_id, quantity)
-    H->>H: Validate JSON and JWT
-    H->>S: CreateOrder(user, product, quantity)
-    S->>R: BeginTx + load active product
-    S->>R: Atomic UPDATE inventory WHERE available >= quantity
-    alt no stock / product missing / subsequent write fails
-        R-->>S: error / no row
-        S->>DB: Rollback deferred transaction
-        S-->>H: domain error
-        H-->>C: 404 or 409 / 400 JSON
-    else stock reserved
-        S->>R: INSERT order and order item
-        S->>R: INSERT ORDER_RESERVED audit movement
+    C->>H: POST /orders + Idempotency-Key + items[]
+    H->>H: Validate JSON, JWT and key
+    H->>S: CreateOrder(user, lines, key)
+    S->>R: Begin transaction; serialize user/key
+    S->>R: Resolve server-side prices and reserve each product in stable ID order
+    alt Existing key and matching payload
+        R-->>S: Original order result
+        S-->>H: Replay=true
+        H-->>C: 200 OK
+    else Stock conflict or write failure
+        R-->>S: Error
+        S->>DB: Rollback all line reservations and inserts
+        S-->>H: Domain error
+        H-->>C: 409 or suitable error response
+    else New order
+        S->>R: Insert order, item snapshots and movement audit rows
         S->>DB: Commit transaction
-        S-->>H: order ID + PENDING + total paise
-        H-->>C: 201 JSON
+        S-->>H: Pending order result
+        H-->>C: 201 Created
     end
+    Note over DB: PostgreSQL is authoritative; Redis is never used for stock/payment state
