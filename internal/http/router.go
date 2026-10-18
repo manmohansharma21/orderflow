@@ -7,6 +7,9 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5/pgxpool"
+
+	"github.com/manmohansharma21/orderflow/internal/repository"
+	"github.com/manmohansharma21/orderflow/internal/service"
 )
 
 type databasePinger interface {
@@ -45,7 +48,10 @@ func NewRouter(pool databasePinger, readinessTimeoutSeconds int) *gin.Engine {
 	})
 
 	if dbPool, ok := pool.(*pgxpool.Pool); ok {
-		orders := &orderHandler{pool: dbPool}
+		orderRepo := repository.NewOrderRepository(dbPool)
+		orderService := service.NewOrderService(orderRepo)
+		orders := newOrderHandler(orderService)
+
 		router.POST("/orders", orders.createOrder)
 	}
 
