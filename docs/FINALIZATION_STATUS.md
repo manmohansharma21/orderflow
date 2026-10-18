@@ -1,35 +1,33 @@
-# OrderFlow Finalization Status
+# Finalization status — OrderFlow
 
-## Verified before this reliability overlay
+**Reviewed commit:** `1515cb0` (`feat: complete provider recovery and HTTP observability`).  
+**GitHub Actions:** completed successfully: https://github.com/manmohansharma21/orderflow/actions/runs/39160539244  
+**Local evidence supplied:** reliability verification passed; Docker image built; `/health` and `/ready` returned successful JSON responses.
 
-- Existing Go/Gin/pgx backend, PostgreSQL migrations 000001–000006, auth, product CRUD, order lifecycle, inventory movements, mock-payment callbacks, and concurrent transactional tests were present in remote `main`.
-- Commit `60c255b` passed GitHub Actions: full tests, integration race tests, vet, migration chain, Docker image build, and `/health`/`/ready` container probes.
-- The user then locally ran the previous Redis/Docker overlay: Redis/service tests passed and Docker image built; `/health` returned `ok` and `/ready` returned `ready`.
+## Implemented and CI-verified at the reviewed commit
 
-## This overlay adds (must be verified and pushed)
+- Go/Gin application, request DTOs, domain models, services, repositories and versioned PostgreSQL migrations `000001`–`000008`.
+- Customer auth/JWT, admin route protection and product CRUD/search/pagination.
+- Multi-product transactional orders, stock reservations, order idempotency, user-owned history/detail/cancellation and safe expiry.
+- Inventory receipts, adjustments and movement audit.
+- Mock payment initiation, HMAC-signed callback, amount/currency validation, failure reason, replay safety, success consumption of stock and failure/cancel/expiry release semantics.
+- Separate simulated-provider ledger and scheduled/triggerable recovery for known success/failure outcomes where callback delivery was missed.
+- Admin order/sales/inventory reports; Redis product cache with TTL/invalidation available as optional behavior.
+- HTTP request IDs, request logs and `/metrics`; Docker build and CI runtime probes.
+- Integration/concurrency/recovery tests, OpenAPI, Postman collection, HLD/LLD/state diagrams, design-pattern/CI documentation.
 
-- Multi-product order requests with server-side price snapshots and transactional multi-item reservation.
-- Order-creation idempotency scoped to authenticated user + key; same request replays the original result and changed payload returns conflict.
-- Mock payment callback amount/currency validation and persisted failure reason.
-- Successful payment consumes both on-hand and reserved stock in the same transaction, with one `ORDER_FULFILLED` inventory movement; failed payment releases stock once.
-- Safe unpaid-order expiry with `EXPIRED` state, batched row locking (`SKIP LOCKED`), reservation release/audit, and a configurable worker. Orders with pending or successful payment are not expired.
-- Admin order status/revenue, sales/payment and inventory/low-stock reports.
-- Redis product list/detail caching with TTL and generation-based invalidation; cache failure falls back to PostgreSQL.
-- Real API-level p50/p95/mean/throughput benchmark (Redis off vs warm cache) plus a repository-layer benchmark; report only actual results.
-- Migration 000007, reliability integration tests, CI learning guide and report/documentation updates.
+## Remaining before submission (not core source-code build)
 
-## Must be done before describing the new overlay as complete
+1. Complete one controlled Postman walkthrough on local data and capture actual PNG evidence listed in `docs/SCREENSHOT_CHECKLIST.md`.
+2. Complete the order-history benchmark with a bounded command if the report needs this number; the earlier attempt was interrupted. Do not treat it as a result.
+3. Keep the measured Redis result honest: the current 300-request API benchmark showed Redis slower for this local workload (P95 13.966 ms vs 4.270 ms without cache). Redis is optional and disabled by default.
+4. Refresh the Word report from the reviewed draft, insert the exact screenshots, update list of figures/tables and page references, verify citations and personal dates, then export/inspect PDF.
+5. After all final evidence/document edits are committed, verify green CI for the exact final HEAD and download the full source ZIP directly from GitHub `main`.
+6. Complete the CI learning walkthrough and later revisit the previous Lambda submission if the user supplies that source/context.
 
-1. From the repo root, run `chmod +x scripts/*.sh && ./scripts/verify-residual-milestone.sh`. This starts dependencies and applies migration 000007 only when not already applied. The script refuses databases whose names are not exactly `orderflow` and `orderflow_test`.
-2. Run `./scripts/docker-smoke-test.sh`. It builds and starts the container and validates health/readiness.
-3. Run `./scripts/benchmark-product-cache.sh` and keep its actual terminal output for the report. Never fabricate before/after numbers.
-4. Review the staged file list. Do not commit `.env`, credentials, backups, or `submission/*DRAFT*` generated reports.
-5. Commit and push. Verify the new `main` commit has a successful GitHub Actions run.
-6. Only after code/CI and benchmark are final, run the screenshot session and update the Word/PDF report with actual evidence.
+## Conditional / not claimed complete
 
-## Scope limits / external work
+- AWS target architecture is documented, but there is no verified live AWS deployment in this repository. Whether one is mandatory must be confirmed in any separate course rubric; the supplied portal form requests GitHub link, source ZIP and report PDF, not a live URL field. Obtain cost approval before provisioning.
+- The provider is a deterministic simulator, not Stripe or another real payment service.
 
-- The callback integration is the intentionally simulated provider described in the project scope; real Stripe/money movement is not claimed.
-- AWS is documented but not deployed. A real deployment requires an AWS account/region, credentials, DNS/network decisions, and explicit cost approval. Do not mark it complete using architecture diagrams alone.
-- CI-learning walkthrough and the user's earlier Lambda deployment review remain follow-up learning tasks. The earlier Lambda source/repository is not present in this project overlay, so it cannot be truthfully reviewed here.
-- Screenshots remain deferred to the final evidence session by request.
+Do not mark screenshot/report/upload work complete until the actual evidence and PDF are reviewed.

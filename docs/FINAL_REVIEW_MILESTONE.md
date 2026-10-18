@@ -1,19 +1,22 @@
-# Final Review Milestone
+# Final Review Milestone — status at commit 1515cb0
 
-## Baseline already verified
+## Code and CI status: complete for this revision
 
-Commit `d891056` passed GitHub Actions: SQL migration application, unit/DB/Redis tests, race-enabled PostgreSQL integration tests, `go vet`, Docker build and health/readiness probes. Local API benchmarking on 18 October 2026 returned 300/300 successful requests in both cache variants, but the warm Redis variant was slower for this dataset. Exact results are saved in `docs/evidence/performance/benchmark-results-20261018T191309Z.txt`.
+Commit `1515cb0` (`feat: complete provider recovery and HTTP observability`) is pushed to `main`. The GitHub Actions run completed successfully: https://github.com/manmohansharma21/orderflow/actions/runs/39160539244. It validates migrations 000001–000008, unit/DB/Redis tests, race-enabled integration tests, `go vet`, whitespace checks, Docker image build and container `/health` + `/ready` probes. The developer-provided terminal log also shows the local verification script and Docker smoke test passed.
 
-## Changes in this patch (must be tested before commit)
+The revision contains migration 000008, the separate simulated-provider ledger, missed-callback recovery through the shared payment transition path, request IDs, `/metrics` counters/histogram, OpenAPI/Postman updates and updated diagrams.
 
-- Migration `000008_mock_provider_reconciliation` keeps mock-provider-side status separate from OrderFlow's payment status.
-- A development-only ADMIN endpoint can settle the simulated provider record without delivering a callback.
-- `ReconcileKnownMockProviderOutcomes` queries those known terminal records and processes them through the same callback service path for validation, idempotency, atomic stock changes and movement audit.
-- The periodic reconciliation worker invokes the recovery method before logging outstanding issues.
-- `X-Request-ID`, structured request logs, `/metrics` request counters and a latency histogram are added.
-- OpenAPI and Postman include the recovery walkthrough; HLD/LLD sources describe the final structure.
-- Redis remains implemented but defaults off based on the measured local API result.
+## Honest benchmark state
 
-## Completion gate
+The product-list API benchmark is complete: 300/300 responses in both modes; P95 was 4.270 ms without Redis and 13.966 ms with warm Redis; throughput was 2,821.81 req/s without cache and 1,697.92 req/s with cache. Redis was slower for the tested small local workload. A service-level order-creation benchmark produced samples, but the order-history benchmark was interrupted; do not present that metric as complete. Run a bounded standalone benchmark only if needed.
 
-Do not mark this patch complete until `scripts/verify-residual-milestone.sh`, `scripts/docker-smoke-test.sh`, the benchmark, and GitHub Actions pass on the same final SHA. The actual AWS deployment and screenshots are separate evidence tasks; do not claim they happened unless they did.
+## Submission work still open
+
+- Documentation cleanup and screenshot runbook overlay.
+- End-stage Postman/browser/terminal screenshots, saved in the repo and pasted into the Word report.
+- Refresh static TOC/lists of figures/tables/page references after screenshots.
+- Fill the actual module start/end and submission dates; personally sign the candidate declaration only after review. Supervisor approval/signature is reserved for the supervisor.
+- Export the final Word to PDF, inspect all pages, and upload a full source archive from final GitHub `main` separately from the PDF.
+- Live AWS is not claimed and is conditional on any separate assessment rubric/cost approval. The provider remains mocked.
+
+This document is a status record, not proof of screenshots or AWS deployment. Update it only when those activities actually occur.

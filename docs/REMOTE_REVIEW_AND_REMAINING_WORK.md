@@ -1,55 +1,38 @@
-# Remote review and residual work tracker
+# OrderFlow remote review and remaining-work tracker
 
-## Verified remote baseline
+**Reviewed remote HEAD:** `1515cb0` (`feat: complete provider recovery and HTTP observability`).  
+**CI:** successful: https://github.com/manmohansharma21/orderflow/actions/runs/39160539244
 
-The previous documentation/CI commit was `60c255b`. GitHub Actions run `39126595788` completed successfully with conclusion `success`: the disposable PostgreSQL migration chain, unit/integration tests, race-enabled integration tests, `go vet`, whitespace check, Docker image build, and runtime `/health` and `/ready` probes all passed at that revision. Do not extend that verification claim to later uncommitted changes without a new successful run.
+## Verified at this revision
 
-## Implemented in the residual bundle (verify after pushing)
+- Go/Gin handlers and request DTOs, domain models, services, repositories, config, `pgxpool`, and migrations 000001–000008.
+- Authentication and role checks, product CRUD/search, inventory receipt/adjustment/audit history.
+- Multi-product transactional orders, user-scoped order list/detail/cancel, order idempotency and concurrent reservation protections.
+- Mock payment initiation, HMAC-signed callback, amount/currency checks, failure reason, payment idempotency, replay safety, success inventory consumption and failed/cancelled/expired reservation release.
+- Separate mock-provider ledger; known terminal outcome recovery after a missed callback; scheduled expiry and reconciliation workers.
+- Admin order/sales/inventory reports, Redis product list/detail caching, request IDs, HTTP metrics, OpenAPI, Postman and editable HLD/LLD/state diagrams.
+- CI passes migration application, unit/integration tests, Redis tests, race integration checks, vet, whitespace check, Docker image build and `/health` / `/ready` smoke test. Local reliability verification and Docker smoke also passed in the supplied terminal logs.
 
-- Redis product list/detail cache with TTL and generation-based invalidation on product mutations.
-- Cache adapter and PostgreSQL+Redis invalidation tests (Redis tests skip locally when `ORDERFLOW_REDIS_TEST_ADDR` is not set; CI sets it).
-- Configurable read-only periodic payment reconciliation worker and worker cancellation/logging test.
-- Compose Redis service, configuration example, README/report updates and HLD refresh.
-- CI adds Redis service, Redis tests, Docker build and runtime health/readiness smoke checks.
+## Still required before submission
 
-## Cumulative tracker
-
-| Area | Status | Next evidence/action |
+| Task | Status | Action |
 |---|---|---|
-| Go/Gin APIs, request DTOs, domain models, services and repositories | Implemented | Existing code; no duplicate packages needed |
-| PostgreSQL schema/migrations and transactions | Implemented; prior CI passed | CI after new bundle |
-| JWT, product CRUD, orders, inventory, mock payments | Implemented and previously runtime-tested | Postman run and screenshots |
-| Integration/concurrency/rollback tests | Committed; prior CI passed | Retain in green CI |
-| README, design-pattern guide, OpenAPI, Postman collection | Committed | Keep synchronized with route changes |
-| HLD, LLD and order/payment state diagrams | Committed; HLD updated in bundle | Confirm rendering and capture if rubric asks |
-| Redis product cache/TTL/invalidation | Added in residual bundle | Green CI proves compile/functional integration tests |
-| Scheduled reconciliation | Read-only worker added in residual bundle | Confirm rubric scope; inspect logs after run |
-| Docker build/runtime | Workflow smoke test added | Green Actions run after push; optionally local screenshot |
-| Live Stripe/provider integration | Mock only | Add only if rubric requires it; needs provider configuration |
-| AWS deployment | Plan only, no deployed resources verified | Deploy with credentials/budget and capture health evidence |
-| Postman screenshots/API evidence | Pending | Follow `docs/evidence/README.md`; capture actual redacted responses and paste into named report chapters |
-| Final project report PDF and submission ZIP | Pending | Finalize using actual run evidence |
-| Earlier Lambda submission | Pending review | Add old deployment artifact/evidence to report |
-| Learn CI configuration | Pending | Walk through `.github/workflows/ci.yml` step by step: triggers, service containers, migrations, tests, race, vet, Docker and smoke probes |
-| Core capstone-spec gaps | Implemented in this reliability overlay; locally unverified | Run migration 000007, full tests and new CI; benchmark measurements still pending |
-| Report template requirements | Draft generated (52-page DOCX/PDF working draft) | Replace highlighted personal/date placeholders, insert actual screenshots, refresh List of Figures/contents, finalize citations and export submission copy |
-| Learning walkthrough | Pending | Explain the completed Go layers after submission |
+| README/documentation cleanup | Documentation overlay prepared | Apply `ORDERFLOW_README_SCREENSHOT_GUIDE_PATCH.zip`, review, commit/push and verify the next CI run |
+| Postman walkthrough/screenshots | Pending | Use `docs/SCREENSHOT_CHECKLIST.md`; redact tokens/secrets |
+| Docker/CI screenshots | Pending | Capture successful local smoke and green run for the final submitted SHA |
+| Product-list API performance | Measured | Redis warm-cache run was slower; retain negative result honestly |
+| Order-history benchmark | Incomplete because the previous run was interrupted | Run bounded `BenchmarkOrderHistoryList` independently and save output if the report requires it |
+| Word/PDF report | Word review draft available; placeholders remain | Insert screenshots, refresh TOC/list-of-figures/page numbers, complete real dates, review references and export/verify final PDF |
+| Full source ZIP for portal | Pending final docs/evidence commit | Download from GitHub `main` after final push and green CI; do not upload incremental patches |
+| Live AWS deployment | Not deployed; rubric-dependent | Check assignment/contest rubric and obtain cost approval before provisioning |
+| Previous Lambda submission | Pending review | Revisit when the earlier deployment repository/artifact is available |
+| Understand CI config | Guide committed | Work through `.github/workflows/ci.yml` with `docs/CI_CONFIGURATION_WALKTHROUGH.md` |
+| Post-submission architecture walkthrough | Pending | Explain request flow, transactions, repositories, idempotency, payment recovery, cache and metrics |
 
-## Evidence capture
+## Performance facts that must be preserved
 
-Exact image filenames, capture timing and the chapter where each image belongs are listed in [`docs/evidence/README.md`](evidence/README.md). A local DOCX/PDF working draft may exist under `submission/`, but draft binaries are intentionally excluded from Git. The Markdown report source is in `docs/PROJECT_REPORT.md`; produce the final Word/PDF after actual measurements and the final evidence session.
+The committed 300-request API benchmark (10 concurrent workers on Apple M2 / Go 1.27.2 / Docker Desktop 29.8.2) measured Redis-disabled P50/P95/mean/throughput of 2.480 ms / 4.270 ms / 3.315 ms / 2,821.81 req/s. Warm Redis measured 4.447 ms / 13.966 ms / 5.702 ms / 1,697.92 req/s. Both variants returned 300/300 successes; Redis was slower for this workload. Service-level order creation values were captured, but the order-history benchmark attempt was interrupted and must not be reported as completed.
 
 ## Scope guardrails
 
-Never commit `.env`, tokens, database passwords, real webhook secrets, local dumps, or production data. CI secrets in its current smoke test are dummy values. Keep the worker read-only until a provider-specific remediation policy is specified. AWS steps can incur charges and must not be treated as completed by writing Terraform or a plan.
-
-
-## Completion-bundle additions (verify locally/CI before marking complete)
-
-- Multi-product order payloads and per-user order idempotency, with integration cases for identical replay and changed-payload conflicts.
-- Amount/currency verification for HTTP callback payloads and durable payment failure reason.
-- Successful-payment stock consumption plus `ORDER_FULFILLED` audit movement; repeated callback must not duplicate consumption.
-- Periodic expiry for old unpaid orders with no pending/success payment; ambiguous/pending provider outcomes are intentionally retained for reconciliation.
-- Admin order, sales and inventory summary endpoints.
-- A repeatable `scripts/benchmark-product-cache.sh` benchmark; real measurements still need to be run and recorded.
-- CI configuration walkthrough and earlier Lambda submission remain learning/review tasks. AWS deployment and screenshot evidence are deliberately pending until actual account access/deployment and the final verification session.
+The payment provider is a deterministic simulator, not Stripe. The AWS architecture is a target design, not evidence of deployed resources. The portal screenshot shows a repo link, project ZIP and separate report PDF; no live AWS URL field is displayed. Confirm a separate rubric requirement before incurring AWS costs. The submission report must distinguish verified code from pending screenshots/administrative dates.

@@ -1,24 +1,18 @@
-# How to understand OrderFlow CI
+# CI configuration walkthrough — learn at final review
 
-CI means Continuous Integration: each push to `main` and pull request runs automated checks on a clean GitHub-hosted runner. It catches dependency drift, migration errors, compile/test failures and container startup failures before a change is treated as ready.
+CI means **Continuous Integration**: each push/pull request triggers an automated quality gate so a change is tested in a repeatable environment rather than relying only on a developer's laptop.
 
-Read `.github/workflows/ci.yml` from top to bottom:
+Open `.github/workflows/ci.yml` from top to bottom:
 
-1. **Triggers**: pushes and pull requests to `main` start the workflow.
-2. **Least privilege**: `contents: read` permits checkout but not write access.
-3. **Service containers**: PostgreSQL 16 and Redis 7 are started as test dependencies; health checks wait for readiness.
-4. **Environment variables**: tests target `orderflow_test`; Redis tests use a separate test DB index/address. These are CI-only credentials, not production secrets.
-5. **Checkout and Go setup**: the runner checks out the commit and selects the Go toolchain pinned in `go.mod`.
-6. **Module consistency**: `go mod tidy` followed by `git diff --exit-code -- go.mod go.sum` makes dependency metadata drift fail CI.
-7. **Migrations**: the workflow applies every `migrations/*.up.sql` file in lexical order to a disposable database. A migration error stops the job.
-8. **Test suites**: `go test -count=1 ./...` runs unit and database/Redis integration tests without using cached results.
-9. **Race detector**: integration tests run under `go test -race` to catch Go memory races, while database locking assertions check inventory concurrency behavior.
-10. **Static checks**: `go vet ./...` and `git diff --check` catch suspicious Go constructs and whitespace errors.
-11. **Image build and runtime smoke test**: Docker builds the API; a container must respond successfully to `/health` and `/ready` before CI passes.
+1. **Triggers:** `push` and `pull_request` targeting `main` mean the workflow runs on new main-branch commits and proposed changes.
+2. **Permissions:** `contents: read` gives the job only the repository read access needed for checkout.
+3. **Runner and service containers:** `ubuntu-latest` runs the job; service containers create disposable PostgreSQL and Redis. Their health checks ensure dependencies are ready before tests.
+4. **Configuration:** workflow environment variables point database tests at the database named `orderflow_test`, and Redis tests at the temporary service. Never copy CI test credentials into production.
+5. **Module consistency:** `go mod tidy` followed by a diff check ensures dependencies declared in `go.mod`/`go.sum` agree with the source.
+6. **Migrations:** the numbered `migrations/*.up.sql` files run in ascending filename order against the disposable CI DB with stop-on-error enabled.
+7. **Tests:** `go test -count=1 ./...` runs tests without trusting cached test results; integration race checks, `go vet`, and whitespace checks add separate gates.
+8. **Image build:** the `Dockerfile` is built in CI to catch packaging/compiler issues.
+9. **Runtime smoke test:** the built container starts and the workflow waits for `/health` and checks `/ready`. This validates a runnable image, not a live AWS deployment.
+10. **Result/evidence:** for submissions, capture the completed green run and the commit SHA that was tested. If source changes after that commit, wait for the new run.
 
-A green run is evidence for that exact commit SHA—not every future commit, AWS deployment, or business rule not covered by tests. After a push, open Actions and confirm the newest run's commit SHA matches `git log -1 --oneline`.
-
-## Related pending learning tasks
-
-- Review the earlier Lambda deployment submission and write down its architecture, deployment configuration and lessons before claiming it is complete.
-- After submission, walk through `cmd/api`, config, HTTP DTOs/handlers, services, repositories, migrations, Redis adapter, workers and tests. The report should distinguish what is implemented from what is only planned.
+Latest reviewed green run: https://github.com/manmohansharma21/orderflow/actions/runs/39160539244 (commit `1515cb0`). If a later source commit becomes `main`, this run remains evidence for `1515cb0`, not for that future commit.

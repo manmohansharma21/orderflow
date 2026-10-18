@@ -1,32 +1,33 @@
-# Scaler capstone submission guide
+# Scaler/Woolf capstone submission guide
 
-The submission page in the supplied screenshot has three deliverable inputs: a public GitHub repository link, a project ZIP (maximum 50 MB) with correct repository structure and README, and a separate report PDF written using the Woolf report template. The page also has two declarations/checkboxes. Review and tick those yourself only when they are true for your work.
+The screenshot of the submission page shows three required deliverable fields: (1) GitHub Repo Link, (2) Upload Project as a ZIP up to 50 MB with proper source structure and README, and (3) Upload Project Report as a PDF up to 50 MB. It also shows two declaration checkboxes. Review and tick those yourself only when each statement is true.
 
-## What to enter
+## What to upload
 
 - **GitHub Repo Link:** `https://github.com/manmohansharma21/orderflow`
-- **Upload Project:** use a full source archive of the *latest pushed `main` branch*, not an incremental overlay ZIP.
-- **Upload Project Report:** use the final personalized PDF exported from the report DOCX after the evidence session. Do not submit a `DRAFT` file.
+- **Upload Project:** the full source archive from the latest pushed `main`, not the incremental ZIP patches used during development.
+- **Upload Project Report:** the final personalized, evidence-complete PDF exported from the Word report. The portal's report field expects PDF; the DOCX is for editing/review.
 
-Direct full-source archive (this is a link to GitHub's downloadable archive, not an incremental code patch):
+Full source archive link: <https://github.com/manmohansharma21/orderflow/archive/refs/heads/main.zip>
 
-`https://github.com/manmohansharma21/orderflow/archive/refs/heads/main.zip`
+## Required order
 
-The archive automatically tracks the current remote branch. Therefore, commit/push the final source and actual benchmark output first, wait for CI to go green for that exact SHA, and only then download the source archive for the portal.
+1. Complete code/docs edits and actual screenshots/benchmark output.
+2. `git status --short`, `git diff --check`, stage only intentional source/docs/evidence. Never stage `.env`, tokens, secrets, DB backups or local personal files.
+3. Commit/push the last revision. Confirm the newest Actions run is green and its SHA matches `git rev-parse --short HEAD`.
+4. Only then download the current `main.zip` from GitHub. This archive includes whatever is in remote `main` at download time.
+5. Verify source ZIP structure, README, migrations, tests, diagrams, OpenAPI and Postman collection; ensure no `.env`, passwords, database dumps, access tokens or report drafts are included.
+6. Complete the Word report: insert evidence PNGs, refresh figure/table list and page numbers, replace only the known personal date placeholders with actual dates, validate citations/AI-tool acknowledgement, and proofread every page.
+7. Export to PDF and render/check all pages. Keep the DOCX separately for editing.
+8. Upload the repo URL, full source ZIP and final PDF in their respective fields. Read the declarations and tick them only if accurate.
 
-## Before uploading
+## Report personalization safeguards
 
-1. Confirm the README, HLD/LLD sources, migration files, tests and OpenAPI/Postman collection are present in GitHub `main`.
-2. Confirm the newest GitHub Actions run is green and its SHA matches `git rev-parse --short HEAD`.
-3. Confirm there is no `.env`, token, password, database dump, personal access token, or generated secret in the source archive.
-4. Remove draft report binaries from the source repository; the PDF belongs in the separate report upload field.
-5. Fill the actual registered student email, actual submission date, and project module dates in the Word report. Review the declaration, references and AI/tool acknowledgement for accuracy. Do not fill the supervisor certification/signature on behalf of the supervisor.
-6. Complete the end-stage screenshot checklist with real browser/Postman/CI evidence and update the report page/figure references.
-7. Verify the final PDF is readable and meets the template formatting/length requirements before uploading.
+The editable review draft uses the candidate name Manmohan Sharma, the supplied mentee email, and Naman Bhalla as supervisor from the provided template. The actual project module start/end dates and actual submission date are intentionally placeholders because they cannot be inferred safely. Candidate signature must be supplied by the candidate. Do not complete the supervisor certification on the supervisor's behalf. Disclose AI-assisted drafting/review and any external sources according to the policy applicable to the programme.
 
-## Do not claim
+## Scope claims to avoid
 
-- Do not claim a live AWS deployment unless it was provisioned and smoke-tested.
-- Do not claim Redis improved latency: the measured local result above was slower for the current dataset.
-- Do not claim a real Stripe/payment integration. The project scope uses a simulated payment provider.
-- Do not fabricate endpoint screenshots, CI runs or metrics. Use actual captured output.
+- Do not claim a live AWS deployment unless real resources were deployed, smoke-tested and evidence collected.
+- Do not claim Redis improved performance: the provided measured local run showed the warm cache slower.
+- Do not claim a real Stripe integration: the implementation uses a mock provider.
+- Do not invent screenshots, benchmark results, reviewer approval or sign-off.

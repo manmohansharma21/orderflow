@@ -1,0 +1,9 @@
+OrderFlow order-history benchmark
+Sun Oct 18 20:17:43 UTC 2026
+Darwin XCM06M2T2G 24.6.0 Darwin Kernel Version 24.6.0: Mon Jul 14 11:30:51 PDT 2025; root:xnu-11417.140.69~1/RELEASE_ARM64_T8112 arm64
+go version go1.27.2 darwin/arm64
+goos: darwin
+goarch: arm64
+pkg: github.com/manmohansharma21/orderflow/internal/integration
+cpu: Apple M2
+BenchmarkOrderHistoryList-8   	

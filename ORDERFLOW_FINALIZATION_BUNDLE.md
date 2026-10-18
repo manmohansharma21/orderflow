@@ -1,32 +1,23 @@
-# OrderFlow Finalization Guide
+# OrderFlow finalization guide
 
-This repository is the source of truth. Incremental ZIPs shared during development are overlays only; they are not the upload artifact for the Scaler project ZIP field.
+The repository at https://github.com/manmohansharma21/orderflow is the source of truth. Incremental ZIPs shared during development are overlays only; they are not the project archive for the Scaler submission page.
 
-## Current baseline
+## Current verified revision
 
-- The latest verified baseline commit before this final-review patch is `d891056`.
-- Its GitHub Actions run succeeded: [Go CI run](https://github.com/manmohansharma21/orderflow/actions/runs/39156676397).
-- Product-read cache and order/payment reliability features are committed.
-- The measured local product-list API benchmark showed Redis slower than direct PostgreSQL for the tested 300-request workload. Redis is therefore optional and disabled by default until a representative workload proves otherwise.
+- Commit: `1515cb0` — `feat: complete provider recovery and HTTP observability`.
+- GitHub Actions succeeded for that exact commit: https://github.com/manmohansharma21/orderflow/actions/runs/39160539244.
+- Local terminal logs show the reliability verification script passed and the Docker smoke image returned `/health` `ok` and `/ready` `ready`.
+- The complete measured product-list API benchmark is committed under `docs/evidence/performance/`; it shows Redis slower for the current local workload. The prior order-history benchmark output is incomplete and not a final result.
 
-## Apply this final-review patch
+## Next work
 
-From the repository root:
+1. Apply the documentation/screenshot guide overlay ZIP and inspect the staged files.
+2. Capture real Postman/Docker/CI evidence after the final source and API runs. Save to `docs/evidence/` and insert the same images into the Word report.
+3. If required, finish the bounded order-history benchmark; do not infer a value from the interrupted output.
+4. Refresh the Word report, TOC/figure/table references and personal date fields; export/check final PDF.
+5. Commit/push final docs and evidence; wait for green CI on that final HEAD.
+6. Download the full source archive from the current `main` branch: https://github.com/manmohansharma21/orderflow/archive/refs/heads/main.zip
 
-```bash
-unzip -o ~/Downloads/ORDERFLOW_FINAL_REVIEW_PATCH.zip -d .
-chmod +x scripts/apply-final-review-patch.sh
-./scripts/apply-final-review-patch.sh
-```
+## Scope boundaries
 
-The patch adds separate simulated-provider state, missed-callback recovery through the shared payment transition path, request IDs and HTTP histogram metrics, a Postman recovery demo, updated OpenAPI/docs/diagrams and the actual benchmark output. It also removes committed report draft binaries from source control because the final PDF must be uploaded separately.
-
-Do not describe these additions as complete until the verification checklist passes and the new commit has green CI.
-
-## Submission fields
-
-The Scaler page expects a public GitHub URL, a full project ZIP under its size limit, and a separate report PDF. After committing/pushing all final code and evidence, download the complete source archive from:
-
-`https://github.com/manmohansharma21/orderflow/archive/refs/heads/main.zip`
-
-Do not upload this incremental patch ZIP as the project ZIP. See `docs/FINAL_SUBMISSION_GUIDE.md`.
+The provider is a simulator, not Stripe. AWS is documented as a target and no live deployment is claimed. The portal screenshot shows a public GitHub link, a full source ZIP, and a separate PDF report. Only provision AWS resources if a separate official rubric requires a live deployment and the cost is approved.

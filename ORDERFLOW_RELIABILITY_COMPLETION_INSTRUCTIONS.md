@@ -1,28 +1,22 @@
-# OrderFlow Final Reliability and Submission Instructions
+# OrderFlow reliability and submission instructions — current revision
 
-The current reliability baseline is `d891056` and its GitHub Actions run passed. The code in that commit covers multi-product order creation, request idempotency, callback amount/currency validation, payment failure reasons, successful-payment stock consumption, unpaid-order expiry and admin reports.
+The reliability and mock-provider recovery source code is already pushed at `1515cb0`, and GitHub Actions for that exact commit completed successfully. Do not reapply `ORDERFLOW_FINAL_REVIEW_PATCH.zip`; that was an incremental overlay used to develop this revision.
 
-This final-review overlay closes the remaining mock-provider missed-callback gap using a separate simulated-provider ledger and the same callback processing path; it adds request IDs, latency histogram metrics, an optional Postman recovery walkthrough, updated OpenAPI, diagrams and report/evidence docs. It is **not verified until your local checks and the new remote CI run pass**.
-
-## Apply / verify
+## Verified locally in the supplied terminal log
 
 ```bash
-unzip -o ~/Downloads/ORDERFLOW_FINAL_REVIEW_PATCH.zip -d .
-chmod +x scripts/*.sh
-./scripts/apply-final-review-patch.sh
 ./scripts/verify-residual-milestone.sh
 ./scripts/docker-smoke-test.sh
-./scripts/benchmark-api-cache.sh
 ```
 
-The migration script checks the database names `orderflow` and `orderflow_test` and skips migration `000008` if its table already exists. Do not run the test migrations against production data. The benchmark writes actual results under `docs/evidence/performance/`.
+Tests/race integration checks/static checks passed; Docker image built and `/health` and `/ready` returned successful responses. The matching remote run is https://github.com/manmohansharma21/orderflow/actions/runs/39160539244.
 
-Before committing, inspect `git status --short`, `git diff --check` and the staged file list. Never stage `.env`, credentials, backups, or report `DRAFT` binaries. Run the tests, commit, push, and confirm CI for that exact SHA is green.
+## Outstanding finalization tasks
 
-## Honest performance interpretation
+- Apply `ORDERFLOW_README_SCREENSHOT_GUIDE_PATCH.zip` and commit the docs cleanup.
+- Complete the final Postman/API evidence session; capture genuine redacted PNGs into `docs/evidence/` and paste those same files into the Word report.
+- The product-list API benchmark is complete and committed. It found Redis slower for the supplied local workload; retain the negative result. The order-history benchmark was interrupted before completion; use the bounded command in `docs/RELIABILITY_MILESTONE.md` if a completed value is required.
+- Refresh the Word report, insert screenshots, verify references and dates, export the required PDF and inspect it.
+- After the final push, confirm CI is green for the final SHA, then download the full source ZIP from GitHub `main` for the portal.
 
-The captured API benchmark reports direct PostgreSQL at P95 4.270 ms and warm Redis at P95 13.966 ms (300 successful requests per case, local Apple M2). It is not a cache speedup. Keep Redis disabled by default until representative larger-data testing shows benefit.
-
-## Scaler upload
-
-Provide the public repository link, download the **full source archive from the final pushed GitHub `main`**, and upload the final PDF report in its separate field. Do not upload this overlay ZIP as the project archive. Screenshots must be captured from actual requests/CI runs and added only after final testing.
+Never commit `.env`, credentials, DB backups or generated report draft binaries. AWS remains conditional on the official rubric and budget approval; the payment integration remains a mock provider.

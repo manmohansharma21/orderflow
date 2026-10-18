@@ -1,42 +1,36 @@
-# Reliability milestone: migration, tests and commit
+# Reliability milestone — current status
 
-This is a repository overlay. Extract from the repository root. It adds migration 000007 and updates the existing domain/service/repository/HTTP worker code plus integration tests. It must be applied on top of the previously installed Redis/Docker milestone.
+The reliability code is already merged into `main` at `1515cb0`. GitHub Actions for that exact commit is green: https://github.com/manmohansharma21/orderflow/actions/runs/39160539244. Do not reapply earlier incremental source-code ZIPs.
 
-## Apply migration 000007 once to the existing local and integration databases
+## Included features
 
-The script checks the exact database names (`orderflow` and `orderflow_test`) in the existing Docker container. It applies only migration 000007 and skips either database if the migration's identifying column already exists. Run it from the repository root:
+- Migration 000007: order idempotency, payment currency/failure reason and EXPIRED order state.
+- Migration 000008: independent mock-provider ledger and recovery hooks.
+- Multi-product transactional order creation with per-user idempotency and stable product lock order.
+- Payment callback amount/currency validation, failure reason, success inventory consumption and replay-safe stock release/consumption.
+- Safe expiry of old unpaid orders, admin order/sales/inventory reports, optional Redis cache, request IDs and `/metrics`.
+- Integration/concurrency/recovery tests and CI verification.
 
-```bash
-chmod +x scripts/apply-reliability-migration.sh scripts/verify-residual-milestone.sh scripts/benchmark-product-cache.sh
-./scripts/apply-reliability-migration.sh
-```
-
-Do not point `ORDERFLOW_TEST_DATABASE_URL` at a production database. This script does not rerun migrations 000001–000006. If the database/container names differ, stop and inspect them rather than editing the guard casually. GitHub Actions always applies the entire migration chain to a disposable PostgreSQL service database.
-
-## Verification commands
-
-One command applies migration 000007 only when needed, starts PostgreSQL/Redis, formats Go source, runs all tests, race tests, vet, and whitespace checks:
+## Verified commands from the latest supplied terminal output
 
 ```bash
-chmod +x scripts/*.sh
 ./scripts/verify-residual-milestone.sh
 ./scripts/docker-smoke-test.sh
 ```
 
-For measured API latency and throughput evidence after tests and Docker smoke pass:
+The first completed with tests, race integration checks and static checks passing. The Docker image built and returned successful `/health` and `/ready` responses. The exact pushed revision also has a green Actions run.
+
+## Benchmark status
+
+The local API benchmark is committed and shows Redis slower for this small workload. Preserve these actual results and do not call the cache an optimization win. The order-creation benchmark produced samples, but the order-history benchmark did not finish before Ctrl+C. Run it separately with a bounded duration only if the report/assignment needs the value:
 
 ```bash
-./scripts/benchmark-api-cache.sh
+export ORDERFLOW_TEST_DATABASE_URL='(set your private connection string to the database named orderflow_test)'
+go test -run='^$' -bench='BenchmarkOrderHistoryList' -benchtime=100ms -benchmem -count=1 ./internal/integration/...
 ```
 
-It records actual p50/p95/mean and throughput for `GET /products` with Redis disabled versus enabled, saving output to `docs/evidence/performance/`. It does not assume caching wins. The repository-layer comparison is also available via `./scripts/benchmark-product-cache.sh`, which uses `orderflow_test` and Redis DB 15.
+Never echo the connection string, and never use a development or production database for tests/benchmarks.
 
-## Review / commit
+## Remaining delivery work
 
-```bash
-git status --short
-git diff --stat
-git diff --check
-```
-
-Stage the intended files after reviewing them. Do not stage `.env`, credentials, SQL backups or local report placeholders. Then commit/push and verify the newest Actions run corresponds to the new HEAD.
+The source build itself is verified at `1515cb0`. Remaining tasks are documentation cleanup, a final genuine Postman/API screenshot session, optional bounded order-history measurement, Word report completion and PDF export, final source ZIP download from `main`, and confirming the final branch CI is green. AWS deployment remains conditional on rubric and cost approval; the mock provider is not a live gateway.

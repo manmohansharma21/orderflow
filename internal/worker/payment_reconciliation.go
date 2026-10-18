@@ -17,8 +17,10 @@ type MockProviderOutcomeRecoverer interface {
 	ReconcileKnownMockProviderOutcomes(context.Context, int, int) (int, error)
 }
 
-// RunPeriodicReconciliation is read-only: it emits detected inconsistencies to
-// the application logger; it does not modify payment/order state automatically.
+// RunPeriodicReconciliation recovers known terminal outcomes from the simulated
+// provider ledger through the payment service's validated transition path, then
+// logs remaining stale/inconsistent payment-order state. It never contacts a live
+// provider and it never performs real charges or refunds.
 func RunPeriodicReconciliation(ctx context.Context, reporter ReconciliationReporter, interval time.Duration, olderThanMinutes int, logger *log.Logger) {
 	if interval <= 0 || reporter == nil || logger == nil {
 		return

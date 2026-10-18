@@ -1,56 +1,50 @@
-# Screenshot checklist — final evidence session only
+# Final screenshot checklist — capture only after verification
 
-Do not spend time capturing screenshots until the reliability milestone has passed local tests, has been committed/pushed, and its GitHub Actions run is green. Use real screenshots only; never paste credentials, bearer tokens, secret values, or unverified benchmark figures.
+This checklist is intentionally an end-stage task. The source commit `1515cb0` has a green CI run, and local tests/Docker smoke passed according to the terminal output supplied. Capture evidence after the final API/benchmark runs and before the final PDF export. If any further code is committed, use the newest successful CI run/SHA instead.
 
-# Submission evidence / screenshots checklist
+## Capture order, exact filename and report placement
 
-Save evidence to `docs/evidence/` (create the directory locally) and reference filenames in the report. Avoid capturing JWTs, passwords, database URLs, webhook secrets, or other credentials in screenshots.
+| Step / when | File to save | What must be visible | Report location |
+|---|---|---|---|
+| 1. After confirming green Actions for the final HEAD | `docs/evidence/ci/01-github-actions-green.png` | Completed successful workflow and commit SHA `1515cb0` (or newer final SHA) | Chapter 14: Docker/CI |
+| 2. After local Docker smoke passes | `docs/evidence/docker/01-health-readiness.png` | Docker build/smoke plus `/health` and `/ready` success | Chapter 14 |
+| 3. After Postman auth/profile request | `docs/evidence/postman/01-auth-profile.png` | `GET /profile`, status and safe JSON; no Authorization token shown | Chapter 7: REST APIs |
+| 4. After product admin create/update and duplicate SKU | `docs/evidence/postman/02-product-admin.png` | Admin response/status and duplicate SKU conflict | Chapter 7 |
+| 5. After inventory receipt/adjustment/movement history | `docs/evidence/postman/03-inventory-audit.png` | Stock numbers, movement type, reason and status | Chapters 8–9 |
+| 6. After multi-item order/replay/conflict/cancel | `docs/evidence/postman/04-order-lifecycle.png` | Order ID/status/item snapshots, replay result and cancellation evidence | Chapters 8–9 |
+| 7. After successful and failed payment callback plus replay | `docs/evidence/postman/05-payment-callbacks.png` | SUCCESS consumes stock; FAILED releases stock once; bad signature receives 401 (separate crops if clearer) | Chapter 10 |
+| 8. After missed-callback recovery and admin reports | `docs/evidence/postman/06-reconciliation-and-reports.png` | Simulated provider outcome set without callback, reconciliation recovery count, and order/sales/inventory reports | Chapter 10 and feature/report chapter |
+| 9. After latest HTTP cache API benchmark | `docs/evidence/performance/01-api-cache-benchmark.png` | Actual no-cache/warm-cache metrics including negative result | Chapter 13 |
+| 10. After completing bounded order-history benchmark | `docs/evidence/performance/02-order-benchmarks.png` | Command and completed actual benchmark output | Chapter 13 |
+| 11. Only after an actual AWS deployment, if required and approved | `docs/evidence/aws/01-live-health.png` | Live endpoint/health without sensitive data | Chapter 15 |
 
-## API behavior (Postman)
+## macOS capture instructions
 
-- [ ] Health response: `GET /health` → 200.
-- [ ] Ready response with database connected: `GET /ready` → 200.
-- [ ] Register/login response; redact the bearer token before saving a screenshot.
-- [ ] Public products search with `search`, `page`, and `limit`.
-- [ ] Admin creates a product and initial inventory; confirm duplicate SKU receives 409.
-- [ ] Inventory available quantity, admin receipt, adjustment and movement history.
-- [ ] Customer creates an order; detail/list show `PENDING` and total in paise.
-- [ ] Customer cancellation releases reserved stock and leaves an `ORDER_RELEASED` movement.
-- [ ] Payment initiation with `Idempotency-Key`; repeating same key returns the same payment ID.
-- [ ] Valid signed mock callback success → order `CONFIRMED`. IMPORTANT: current code retains reservation on SUCCESS, while the original capstone spec says successful reserved stock becomes consumed; fix and test this mismatch before claiming stock consumption in the report.
-- [ ] Valid signed mock callback failure → order `FAILED` and stock released once.
-- [ ] Invalid mock signature → 401.
-- [ ] Admin payment reconciliation response.
+1. Create the directory if needed: `mkdir -p docs/evidence/{ci,docker,postman,performance,observability,aws}`.
+2. Arrange the relevant app result so the request/command and response are legible.
+3. Press **Command + Shift + 4**, then drag to select only the relevant area. macOS saves a PNG to the configured screenshot location; move it to the exact path above.
+4. For Postman, show the request name, method/path, HTTP status and response JSON. Use a dedicated demo account. Do not leave the Authorization tab, token, password, webhook secret or `.env` visible. If a token appears in the response, permanently redact it in Preview before committing the image.
+5. For terminal output, enlarge the font and keep the full success lines visible, not a partial command interrupted with Control+C.
+6. Inspect the saved PNG, then paste that same PNG into the corresponding yellow placeholder in the Word report. Add its figure caption and refresh the list of figures/table of contents after page layout stops changing.
 
-## Automated test evidence
+## Postman run order
 
-- [ ] Terminal or CI log for `go test ./...`.
-- [ ] Terminal or CI log for `go test -race ./internal/integration/...`.
-- [ ] Terminal or CI log for `go vet ./...`.
-- [ ] GitHub Actions workflow run after the CI file is pushed (the presence of a workflow file is not evidence that it ran).
-- [ ] GitHub commit page showing the final commit SHA.
+Import `docs/postman/OrderFlow.postman_collection.json` into Postman. Use local demo accounts only. Run requests in collection order and the separate **Missed callback reconciliation demo** folder. Register/login a customer; use an explicitly promoted local ADMIN account for protected requests. Use the collection's variable capture and same idempotency key for replay tests. Never export or commit a collection with populated access tokens/secrets.
 
-## Architecture and documentation evidence
+## Automated evidence
 
-- [ ] README HLD and LLD diagrams render on GitHub.
-- [ ] OpenAPI file loads in Swagger UI without parse errors.
-- [ ] Postman collection imported and at least one full test path has passed.
-- [ ] Project report updated with actual results, screenshot references, and rubric-specific additions.
-- [ ] Final submission ZIP/PDF reviewed; `.env`, access tokens, and credentials excluded.
+Before screenshots, run and preserve the real results of:
 
-## When to capture and where to paste
+```bash
+./scripts/verify-residual-milestone.sh
+./scripts/docker-smoke-test.sh
+./scripts/benchmark-api-cache.sh
+```
 
-See [`docs/evidence/README.md`](evidence/README.md) for the exact capture timing, filenames, and report chapters. Create the named subfolders as evidence is captured.
+Run the long order-history benchmark separately with a bounded duration if required:
 
-## CI learning checklist
+```bash
+go test -run='^$' -bench='BenchmarkOrderHistoryList' -benchtime=100ms -benchmem -count=1 ./internal/integration/...
+```
 
-Add time to learn `.github/workflows/ci.yml`: triggers, job permissions, service containers, migration loop, Go version setup, tests/race, vet/whitespace, Docker build and runtime probes. Do not call the residual workflow verified until the exact pushed commit has a green run.
-
-## New residual milestone evidence
-
-- [ ] GitHub Actions run after Redis/worker changes: Redis TTL and version tests pass.
-- [ ] GitHub Actions Docker image build passes.
-- [ ] GitHub Actions container smoke check shows `/health` and `/ready` succeed.
-- [ ] Product list/detail cache invalidation after an admin update passes in the PostgreSQL+Redis test.
-- [ ] Optional local `scripts/docker-smoke-test.sh` output saved without environment values.
-- [ ] Reconciliation worker log example captured with synthetic/test data only; redact IDs if using real data.
+The previous history benchmark attempt was interrupted before completion; do not invent a result. Do not take AWS screenshots unless an actual approved deployment exists. The target AWS architecture diagram is not proof of a live deployment.

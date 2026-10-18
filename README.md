@@ -1,289 +1,285 @@
-# OrderFlow — Go E-commerce Backend
+# OrderFlow — E-commerce Order and Payment Management API
 
-OrderFlow is a REST backend for a small e-commerce/order-processing workflow. It is written in Go with Gin, PostgreSQL and `pgx`. The current payment gateway is deliberately a **mock provider** with an HMAC-signed callback; this repository does not yet contain a live Stripe integration or an AWS deployment.
+**Author:** Manmohan Sharma  
+**Repository:** <https://github.com/manmohansharma21/orderflow>  
+**Verified implementation commit:** `1515cb0` — `feat: complete provider recovery and HTTP observability`  
+**CI result for that commit:** [GitHub Actions run 39160539244](https://github.com/manmohansharma21/orderflow/actions/runs/39160539244) — completed successfully.
 
-> **Verified baseline:** commit `d891056` passed GitHub Actions, including migrations, tests, race checks, vet, Docker build and runtime health/readiness. The final-review overlay adds mock-provider recovery and HTTP observability; it must pass a new local test run and CI before submission.
+OrderFlow is a Go/Gin REST backend demonstrating catalogue, inventory, transactional order placement, simulated payment processing, idempotency, recovery of missed simulated-provider callbacks, operational reports and request observability. PostgreSQL is the source of truth. Redis is an optional product-read cache and is **disabled by default** because the tested local workload was slower with the warm cache.
+
+> **Scope clarity:** this is a simulated payment provider, not a real Stripe or money-moving integration. The AWS architecture is documented as a target; no live AWS deployment is claimed. See `docs/AWS_DEPLOYMENT_PLAN.md` before provisioning any chargeable cloud resources.
+
+## Current verified state
+
+At commit `1515cb0`, the submitted source has a green CI run. The workflow applies migrations to disposable PostgreSQL and starts disposable Redis, runs tests and race checks, runs `go vet`, builds the Docker image and checks `/health` and `/ready`. On the developer Mac, the supplied terminal output also shows the reliability suite passed and the Docker smoke test returned `{"status":"ok"}` from `/health` and `{"status":"ready"}` from `/ready`.
+
+The successful CI workflow is tied to the exact commit above. If code changes after this point, verify the workflow for the new commit before calling that newer revision verified.
 
 ## What is implemented
 
-- Registration and login with bcrypt password hashing and 24-hour HS256 JWTs.
-- Public product listing/search/detail and ADMIN-only create/update/deactivate.
-- Authenticated order creation, per-user order history/detail and cancellation.
-- Transactional inventory reservation; inventory receipts/adjustments and movement audit history.
-- Mock payment initiation with idempotency keys, HMAC-SHA256 callback validation, replay-safe status transitions, and an admin reconciliation report.
-- Health/readiness endpoints and PostgreSQL-backed integration tests, including concurrent order/payment scenarios.
-- Optional Redis-backed product list/detail cache with a 60-second default TTL and generation-based invalidation after product create/update/deactivation.
-- Scheduled mock-provider reconciliation that recovers known terminal outcomes through the shared callback path and logs remaining inconsistent states; real gateway recovery is out of scope.
-- CI now tests a disposable PostgreSQL database and Redis, builds the Docker image, and smoke-tests `/health` and `/ready` inside the container.
+- Customer registration/login with bcrypt password hashing and JWT authentication; admin-only route protection.
+- Public product list, search, pagination and detail; admin product create/update/deactivate.
+- Inventory availability, stock receipts, adjustments and movement audit history.
+- Multi-product order creation (up to 50 distinct product lines), server-side price calculation, transaction-based reservations and immutable order-item snapshots.
+- Required order `Idempotency-Key`: identical retries replay the prior order; reusing a key with a different normalized payload returns a conflict.
+- Customer-scoped order list/detail/cancellation; conditional inventory updates and transaction rollback.
+- Mock payment initiation idempotency; HMAC-SHA256 signed callback verification over raw request bytes; callback amount/currency validation; failure reasons; safe replay handling.
+- Successful payment consumes both on-hand and reserved inventory and records `ORDER_FULFILLED`; failed payment releases reservations once.
+- Separate simulated-provider transaction ledger and an admin-only demo control to set a provider-side SUCCESS/FAILED outcome without delivering a callback. The reconciliation path can recover such a known outcome through the same validation/state-transition path as the callback.
+- Periodic unpaid-order expiry with safe locking; orders with a pending or successful payment are excluded from expiry.
+- Admin reports: order totals/status/revenue, date-filtered sales/payment totals, inventory totals and low-stock products.
+- Optional Redis cache-aside product list/detail reads with a TTL and generation-based invalidation. Redis errors fail open to PostgreSQL.
+- `X-Request-ID`, request logs, and Prometheus text metrics at `/metrics`.
+- Health/readiness endpoints, eight numbered SQL migration pairs, Go tests, PostgreSQL integration/concurrency/recovery tests, benchmark scripts, OpenAPI contract, Postman collection, HLD/LLD diagrams and CI configuration.
 
-## Architecture at a glance (HLD)
+## Architecture and package layout
+
+### HLD — request and storage architecture
 
 ```mermaid
 flowchart LR
-    U[Client / Postman] -->|HTTP JSON| R[ Gin Router ]
-    R --> H[HTTP Handlers and request DTOs]
-    H --> A[JWT Authentication / Role Checks]
-    A --> S[Service Layer]
-    S --> D[Domain Models and Rules]
-    S --> P[Repository Layer]
-    P --> DB[(PostgreSQL)]
-    CACHE[(Redis product cache)]
-    S -->|product reads / best-effort cache| CACHE
-    SCHED[Periodic reconciliation worker] --> PSVC[Payment service]
-    PSVC --> PRX[Payment repository]
-    PRX --> DB
-    WH[Mock Payment Callback] -->|HMAC-SHA256| PH[Payment Handler]
-    PH --> PS[Payment Service]
-    PS --> PR[Payment Repository]
-    PR --> DB
-    DB --- IM[Inventory Movement Audit]
+  Client[Customer / Admin / Postman] --> API[Gin REST API]
+  API --> DTO[HTTP handlers and request DTOs]
+  DTO --> AUTH[JWT / role middleware]
+  AUTH --> SVC[Services and business rules]
+  SVC --> PG[(PostgreSQL source of truth)]
+  SVC -. optional product cache .-> REDIS[(Redis: TTL + generation invalidation)]
+  PG --> PROVIDER[(Simulated provider ledger)]
+  WORKER[Expiry and reconciliation workers] --> SVC
+  API --> METRICS[/metrics + X-Request-ID/]
+  CI[GitHub Actions] -. tests, vet and container smoke .-> API
 ```
 
-The Redis cache is optional and fail-open: PostgreSQL remains the source of truth. The scheduled worker recovers known terminal outcomes from the separate simulated-provider ledger through the same validated callback transition path, then reports remaining stale/inconsistent states to application logs. It does not integrate with a live gateway. This diagram represents source structure, not a claim that the system is deployed to AWS. The editable diagram sources are in [`docs/diagrams/HLD.mmd`](docs/diagrams/HLD.mmd) and [`docs/diagrams/LLD.mmd`](docs/diagrams/LLD.mmd).
-
-## Low-level design (LLD)
+### LLD — order placement
 
 ```mermaid
-flowchart TD
-    C[HTTP request] --> V[Bind and validate request DTO]
-    V --> AUTH{Protected route?}
-    AUTH -- Yes --> JWT[Validate Bearer JWT / role]
-    AUTH -- No --> SVC
-    JWT --> SVC[Call use-case service]
-    SVC --> TX[Begin PostgreSQL transaction]
-    TX --> LOCK[Atomic inventory update / row locks]
-    LOCK --> ORDER[Write order and order item]
-    ORDER --> AUDIT[Write inventory movement]
-    AUDIT --> COMMIT[Commit transaction]
-    COMMIT --> RESP[JSON response]
-    LOCK -. insufficient stock .-> ROLLBACK[Rollback; return conflict]
-    ROLLBACK --> ERR[Consistent error response]
+sequenceDiagram
+  participant C as Client
+  participant H as Order handler / DTO validation
+  participant S as Order service
+  participant R as Repository
+  participant DB as PostgreSQL
+  C->>H: POST /orders + Idempotency-Key
+  H->>H: Authenticate and validate items
+  H->>S: CreateOrder(user, items, key)
+  S->>R: Begin transaction; lock idempotency key
+  S->>R: Read active prices; reserve stock in stable product order
+  S->>R: Insert order, order items and inventory movements
+  R->>DB: Commit atomically
+  DB-->>H: Order ID, PENDING, amount in paise
+  alt Any reservation or write fails
+    S->>DB: Rollback
+    H-->>C: Consistent error response
+  end
 ```
 
-### Order and payment state flow
+### Package responsibilities
+
+| Package/path | Responsibility |
+|---|---|
+| `cmd/api/main.go` | Composition root, HTTP server lifecycle, worker start/stop and graceful shutdown |
+| `internal/config` | Environment-driven configuration and bounds checking |
+| `internal/http` | Gin routes, transport/request DTOs, authentication middleware and HTTP error mapping |
+| `internal/domain` | Order, order item, payment, inventory, report and simulated-provider types |
+| `internal/service` | Business validation, use-case orchestration, state transitions and cache-aside behavior |
+| `internal/repository` | SQL persistence, row locks, conditional inventory changes, idempotency and report queries |
+| `internal/database` | PostgreSQL `pgxpool` connection setup |
+| `internal/cache` | Redis cache adapter |
+| `internal/worker` | Known mock-provider outcome recovery, stale payment reporting and unpaid-order expiry |
+| `internal/observability` | Request IDs, bounded-cardinality request metrics/histogram and request logs |
+| `internal/integration` | PostgreSQL/Redis integration, concurrency, recovery and benchmark tests |
+| `migrations/` | Versioned database schema changes (`000001` through `000008`) |
+| `docs/diagrams/` | Editable HLD, LLD and order/payment state diagrams |
+
+Request DTOs currently live next to their relevant HTTP handlers; domain models live in `internal/domain`. A separate DTO package is optional, not a missing correctness requirement. See `docs/DESIGN_PATTERNS.md` and `docs/CI_CONFIGURATION_WALKTHROUGH.md` for learning notes.
+
+### Order/payment states
 
 ```mermaid
 stateDiagram-v2
-    [*] --> PENDING: create order / reserve inventory
-    PENDING --> CONFIRMED: mock payment SUCCESS / consume stock
-    PENDING --> FAILED: mock payment FAILED / release reservation
-    PENDING --> CANCELLED: customer cancellation / release reservation
-    PENDING --> EXPIRED: unpaid-order worker / release reservation
-    CONFIRMED --> [*]
-    FAILED --> [*]
-    CANCELLED --> [*]
+  [*] --> PENDING: Order created / stock reserved
+  PENDING --> CONFIRMED: Payment SUCCESS / stock consumed
+  PENDING --> FAILED: Payment FAILED / reservation released
+  PENDING --> CANCELLED: Customer cancels / reservation released
+  PENDING --> EXPIRED: Unpaid order expires / reservation released
+  CONFIRMED --> [*]
+  FAILED --> [*]
+  CANCELLED --> [*]
+  EXPIRED --> [*]
 ```
-
-## Package structure and design patterns
-
-| Location | Responsibility |
-|---|---|
-| `cmd/api/main.go` | Composition root, HTTP server lifecycle, graceful shutdown |
-| `internal/config` | Environment configuration |
-| `internal/http` | Gin routes, request binding, auth middleware and HTTP status mapping |
-| `internal/domain` | JSON response/domain types and use-case input types |
-| `internal/service` | Business validation, transaction orchestration, state rules and product cache-aside logic |
-| `internal/repository` | PostgreSQL persistence, query isolation and transaction operations |
-| `internal/database` | `pgxpool` connection setup |
-| `migrations` | Versioned SQL schema changes |
-| `internal/integration` | Real PostgreSQL integration and concurrency tests (including optional Redis invalidation test) |
-| `internal/cache` | Redis adapter for product read caching |
-| `internal/observability` | Request IDs, request counters and HTTP latency histogram at `/metrics` |
-| `internal/worker` | Scheduled provider-outcome recovery, unpaid-order expiry and reconciliation reporting |
-
-The existing code already has domain models, request DTO structs (private to the relevant HTTP handler files), repository implementations and services. A separate DTO package is not required for correctness; creating duplicate model/DTO/repository layers would add indirection without adding functionality. See [`docs/DESIGN_PATTERNS.md`](docs/DESIGN_PATTERNS.md) for code-reading guidance.
 
 ## Prerequisites
 
-- Go version compatible with `go.mod` (`go 1.26.0` at the remote-review baseline).
-- Docker Desktop / Docker Engine with Compose.
-- PostgreSQL client (`psql`) for applying the initial migrations.
-- A local `.env` file copied from `.env.example`.
+- Go version compatible with `go.mod` (repository CI uses the version declared in `go.mod`).
+- Docker Desktop/Engine with Docker Compose.
+- `psql` PostgreSQL client for initial setup/migrations.
+- Postman for the API evidence run (optional for basic health checks).
 
-## Local setup
+## Local setup — read before running migrations
 
-1. Start the PostgreSQL container:
+1. From the repository root, start the dependencies:
 
    ```bash
-   docker compose up -d postgres
+   docker compose up -d postgres redis
    docker compose ps
    ```
 
-2. Copy `.env.example` to `.env`; replace example values locally. Generate independent random secrets (do not commit `.env`):
+2. Create a local environment file if you do not already have one:
 
    ```bash
    cp .env.example .env
    openssl rand -hex 32
    ```
 
-   Put one generated value in `JWT_SECRET` and a different generated value in `MOCK_PAYMENT_WEBHOOK_SECRET`. The PostgreSQL port exposed by Compose is `5433`; the default example URL must match your local container credentials.
+   Generate two different random values. Put one into `JWT_SECRET`, the other into `MOCK_PAYMENT_WEBHOOK_SECRET`. Match the local Postgres port and credentials in `DATABASE_URL`. Do **not** commit `.env` or paste secret values in tickets/screenshots.
 
-3. For a **fresh empty development database only**, load the local variables and apply migrations in order:
+3. **Migration safety:** your current `orderflow` and `orderflow_test` databases already have migrations through `000008`. Do not rerun the initial migration loop on these existing databases. For a brand-new empty local database only, apply all `migrations/*.up.sql` in ascending filename order once. The project scripts guard database names and skip applied reliability migrations.
 
-   ```bash
-   set -a; . ./.env; set +a
-   for migration in migrations/*.up.sql; do
-     echo "Applying $migration"
-     psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f "$migration" || exit 1
-   done
-   ```
-
-   Do **not** rerun this initial-migration loop on the already-migrated `orderflow` database. For the separate integration database, follow [`INTEGRATION_TESTING_MILESTONE.md`](INTEGRATION_TESTING_MILESTONE.md); `orderflow_test` is already initialized on the author's current local setup.
-
-4. Run the API from the repository root:
+4. Run the application:
 
    ```bash
    go mod download
    go run ./cmd/api
    ```
 
-5. Verify health and database readiness:
+5. In another terminal, verify:
 
    ```bash
    curl -i http://localhost:8080/health
    curl -i http://localhost:8080/ready
+   curl -i http://localhost:8080/metrics
    ```
 
-   Expected success bodies are `{"status":"ok"}` and `{"status":"ready"}` respectively.
+   `/health` should return `200` with `{"status":"ok"}`. `/ready` should return `200` with `{"status":"ready"}` when PostgreSQL is reachable. `/metrics` returns Prometheus text metrics. Each request also carries an `X-Request-ID` response header.
 
-## Tests and static checks
+## Main REST APIs
+
+The full OpenAPI 3.0 contract is `docs/openapi.yaml`; import `docs/postman/OrderFlow.postman_collection.json` into Postman.
+
+| Method | Path | Access | Purpose |
+|---|---|---|---|
+| `GET` | `/health` | Public | Process health |
+| `GET` | `/ready` | Public | PostgreSQL readiness |
+| `GET` | `/metrics` | Public/internal network recommended | Request counters and latency histogram |
+| `POST` | `/auth/register` | Public | Register CUSTOMER |
+| `POST` | `/auth/login` | Public | Get JWT |
+| `GET` | `/profile` | Bearer JWT | Current user profile/role |
+| `GET` | `/products` | Public | Active catalogue search/pagination |
+| `GET` | `/products/{id}` | Public | Active product detail |
+| `POST` | `/products` | ADMIN | Create product and initial stock |
+| `PATCH` | `/products/{id}` | ADMIN | Update product |
+| `DELETE` | `/products/{id}` | ADMIN | Deactivate product |
+| `GET` | `/inventory/{product_id}` | Public | On-hand, reserved and available quantities |
+| `POST` | `/admin/inventory/receipts` | ADMIN | Receive stock with reason |
+| `POST` | `/admin/inventory/adjustments` | ADMIN | Adjust stock with reason |
+| `GET` | `/admin/inventory/movements` | ADMIN | Paginated stock movement audit |
+| `POST` | `/orders` | Bearer JWT + `Idempotency-Key` | Create single-/multi-product order |
+| `GET` | `/orders` | Bearer JWT | Current user's orders |
+| `GET` | `/orders/{id}` | Bearer JWT | Owner-scoped order detail |
+| `POST` | `/orders/{id}/cancel` | Bearer JWT | Cancel pending order |
+| `POST` | `/orders/{id}/payments` | Bearer JWT + `Idempotency-Key` | Create/get mock payment attempt |
+| `POST` | `/payments/mock-callback` | HMAC-signed request | Deliver simulated provider callback |
+| `GET` | `/admin/payments/reconciliation` | ADMIN | Report stale/inconsistent payment states |
+| `POST` | `/admin/mock-provider/payments/{id}/outcome` | ADMIN; disabled when `APP_ENV=production` | Demo-only: settle provider ledger without callback |
+| `POST` | `/admin/payments/reconciliation/run` | ADMIN | Recover known simulated-provider outcomes now |
+| `GET` | `/admin/reports/orders` | ADMIN | Status and confirmed-revenue summary |
+| `GET` | `/admin/reports/sales?from=YYYY-MM-DD&to=YYYY-MM-DD` | ADMIN | Date-filtered sales/payment summary |
+| `GET` | `/admin/reports/inventory?low_stock_threshold=5` | ADMIN | Inventory/low-stock report |
+
+For the missed-callback demonstration, use only disposable local test data: the collection has a folder named **Missed callback reconciliation demo**. It sets a terminal result in the separate mock-provider ledger, deliberately omits the callback, then invokes the reconciliation endpoint. This is a teaching simulator—not an actual payment gateway.
+
+## Test and static-analysis commands
+
+For ordinary tests:
 
 ```bash
 go test ./...
-go test -race ./internal/integration/...
 go vet ./...
 git diff --check
 ```
 
-For the PostgreSQL-backed suite, set `ORDERFLOW_TEST_DATABASE_URL` to the dedicated database whose name is exactly `orderflow_test`, then run `./scripts/run-integration-tests.sh`. The test helper refuses any other database name. Never point it at development or production data.
+For PostgreSQL integration/race tests, keep `ORDERFLOW_TEST_DATABASE_URL` set to the dedicated database named exactly `orderflow_test` in the same terminal. Never point it at `orderflow` or production.
 
-## API documentation / Swagger UI
-
-The OpenAPI 3.0 contract is [`docs/openapi.yaml`](docs/openapi.yaml). The request examples and variable workflow are in [`docs/postman/OrderFlow.postman_collection.json`](docs/postman/OrderFlow.postman_collection.json). This repository does not currently mount a `/swagger` or `/docs` API route; use the spec with Swagger UI locally:
+The main local verification script is:
 
 ```bash
-docker run --rm -p 8081:8080 \
-  -e SWAGGER_JSON=/spec/openapi.yaml \
-  -v "$PWD/docs/openapi.yaml:/spec/openapi.yaml:ro" \
-  swaggerapi/swagger-ui
+chmod +x scripts/*.sh
+./scripts/verify-residual-milestone.sh
+./scripts/docker-smoke-test.sh
 ```
 
-Open `http://localhost:8081`. This runs Swagger UI as a separate container and does not add a dependency to the Go API.
+The first script starts local dependencies as needed, verifies/migrates the designated local/test databases only when migrations are missing, then runs the full Go tests, race-enabled integration tests, vet and whitespace checks. The Docker smoke script builds the image and checks `/health` and `/ready` inside the container. Do not interrupt these commands mid-run; run benchmarking scripts separately rather than chaining them.
 
-## HTTP route summary
+### Performance benchmarks — current honest result
 
-| Method | Path | Access | Purpose |
-|---|---|---|---|
-| GET | `/health` | Public | Process health |
-| GET | `/ready` | Public | PostgreSQL readiness |
-| POST | `/auth/register` | Public | Register CUSTOMER |
-| POST | `/auth/login` | Public | Get JWT |
-| GET | `/profile` | Bearer JWT | Current user ID and role |
-| POST | `/admin/example` | ADMIN | Example protected route |
-| GET | `/products` | Public | Search/paginate active products |
-| GET | `/products/{id}` | Public | Get active product |
-| POST | `/products` | ADMIN | Create product and initial inventory |
-| PATCH | `/products/{id}` | ADMIN | Update product fields |
-| DELETE | `/products/{id}` | ADMIN | Deactivate product (not hard-delete) |
-| GET | `/inventory/{product_id}` | Public | On-hand/reserved/available quantities |
-| POST | `/admin/inventory/receipts` | ADMIN | Receive stock |
-| POST | `/admin/inventory/adjustments` | ADMIN | Adjust stock with a reason |
-| GET | `/admin/inventory/movements` | ADMIN | Filter/paginate audit movements |
-| POST | `/orders` | Bearer JWT | Create order / reserve stock |
-| GET | `/orders` | Bearer JWT | Current user's order list |
-| GET | `/orders/{id}` | Bearer JWT | Current user's order detail |
-| POST | `/orders/{id}/cancel` | Bearer JWT | Cancel PENDING order |
-| POST | `/orders/{id}/payments` | Bearer JWT + `Idempotency-Key` | Initiate mock payment |
-| POST | `/payments/mock-callback` | HMAC-signed request | Mock provider callback |
-| GET | `/admin/payments/reconciliation` | ADMIN | List payment/order inconsistencies |
+The committed run `docs/evidence/performance/benchmark-results-20261018T191309Z.txt` measured 300 product-list API requests per variant with 10 concurrent workers on an Apple M2, macOS arm64, Go 1.27.2, Docker Desktop 29.8.2:
 
-Full request/response schemas and status codes are in the OpenAPI file.
+| Metric | Redis disabled | Warm Redis cache |
+|---|---:|---:|
+| Successful responses | 300/300 | 300/300 |
+| P50 latency | 2.480 ms | 4.447 ms |
+| P95 latency | 4.270 ms | 13.966 ms |
+| Mean latency | 3.315 ms | 5.702 ms |
+| Throughput | 2,821.81 req/s | 1,697.92 req/s |
 
-## Important implementation boundaries
+For this small local dataset/workload, Redis was slower. This is a valid negative experiment; the report must not claim a cache speedup. `REDIS_ENABLED=false` is therefore the local default while the cache remains available for evaluation with a representative, larger dataset.
 
-- Money is represented as integer paise (`price_paise`, `amount_paise`), not floating-point rupees.
-- Product deletion is soft deactivation; inactive products are not returned by public active-product reads.
-- `available_quantity = on_hand_quantity - reserved_quantity`.
-- Order creation reserves inventory inside the same PostgreSQL transaction that writes order, item and movement rows. A failed operation rolls back those writes.
-- The mock payment callback signs the **exact raw request-body bytes** using HMAC-SHA256 and expects `X-Mock-Signature: sha256=<hex>`. Use the mock webhook secret; this is not a Stripe signature verifier.
-- A successful mock payment confirms the order and consumes both on-hand and reserved stock with an ORDER_FULFILLED audit movement. A failed payment records a reason, marks the order FAILED and releases the reservation once.
-- Admin creation is not exposed as a public registration role; registered accounts start as CUSTOMER. For a local admin demo, promote a dedicated test user manually in the local database. Never expose a production database to a demo workflow.
+The service/repository-path order benchmarks are different from HTTP P95 measurements. The earlier run was interrupted before `BenchmarkOrderHistoryList` completed, so the order-history number is **not yet a final result**. Run the benchmarks separately and with a bounded duration:
 
-## Redis and scheduled reconciliation
-
-Redis is an optional acceleration layer for `GET /products` and `GET /products/{id}`. Cache entries use a generation-numbered namespace and TTL; product create/update/deactivation increments the generation so new reads cannot reuse prior-generation keys. If Redis is unavailable at startup, the API stays operational and falls back to PostgreSQL. `REDIS_DB` must be 0–15; use separate disposable databases for tests.
-
-A configurable background worker runs the existing reconciliation report periodically and logs each issue. It is read-only; it does not mutate payments/orders or replace a real provider reconciliation process. Set `RECONCILIATION_INTERVAL_SECONDS=0` to disable the worker.
-
-## Docker build and runtime smoke test
-
-The GitHub Actions workflow now starts disposable PostgreSQL and Redis services, runs migrations, executes unit/integration tests and race checks, builds the image, then starts the container and probes `/health` and `/ready`. The green workflow run is the evidence of success; a local Docker build still needs to be executed if the assessment specifically requires a screenshot from the developer machine.
-
-## Finalization status
-
-Core Go APIs, models, services, repositories, migrations and automated tests are implemented. Redis caching and scheduled read-only reconciliation are included; apply migration 000007 and verify the new reliability suite and CI before claiming that milestone as complete. A live payment provider and AWS deployment are not claimed here. Track evidence in [`docs/SCREENSHOT_CHECKLIST.md`](docs/SCREENSHOT_CHECKLIST.md) and remaining work in [`docs/REMOTE_REVIEW_AND_REMAINING_WORK.md`](docs/REMOTE_REVIEW_AND_REMAINING_WORK.md).
-
-
-## Screenshot evidence and report
-
-The exact screenshot runbook is in [`docs/evidence/README.md`](docs/evidence/README.md). The report source is maintained in `docs/PROJECT_REPORT.md`. A local DOCX/PDF working draft may exist under `submission/`, but those `*_DRAFT.*` files are intentionally ignored by Git and are not the final submission. Generate the submission report after final verification, actual benchmark measurements and the end-of-project evidence session.
-
-## Residual code milestone (not yet verified on every developer machine)
-
-The reliability overlay additionally supports multi-product order requests, order-request idempotency, callback amount/currency validation and failure reasons, stock consumption on successful payment, safe unpaid-order expiry, and admin reporting. Run `scripts/verify-residual-milestone.sh`, then `scripts/docker-smoke-test.sh` and `scripts/benchmark-product-cache.sh`. These changes are not complete until the new tests pass and the new HEAD's GitHub Actions run is green. The benchmark must be run on your own environment; record measured values only. AWS deployment and real payment-provider status lookup remain external/environment-dependent work.
-
-
-## Reliability extensions (current completion bundle)
-
-- `POST /orders` accepts one legacy `product_id`/`quantity` payload or an `items` array of 1–50 distinct products. A required `Idempotency-Key` replays an identical request and returns 409 if the same key is reused with a different payload.
-- A valid successful mock-payment callback verifies the persisted amount and currency, marks the order `CONFIRMED`, consumes on-hand and reserved stock, and writes an `ORDER_FULFILLED` movement in one database transaction. A failed callback records `failure_reason` and releases reservations.
-- A periodic worker expires old `PENDING` orders only when there is no `PENDING` or `SUCCESS` payment. It deliberately does not expire an unresolved payment because the provider may have charged and the callback may be delayed.
-- Admin reports: `GET /admin/reports/orders`, `GET /admin/reports/sales?from=YYYY-MM-DD&to=YYYY-MM-DD`, and `GET /admin/reports/inventory?low_stock_threshold=5`.
-- `scripts/benchmark-api-cache.sh` measures actual `GET /products` p50/p95/mean latency and throughput with Redis disabled/enabled under a repeatable local request load; results are saved under `docs/evidence/performance/`. `scripts/benchmark-product-cache.sh` additionally compares repository-layer PostgreSQL and warm Redis list reads. Use measured outputs only.
-
-Apply new schema changes once to both your local development DB and the dedicated test DB by following `docs/RESIDUAL_MILESTONE.md`. Never point `ORDERFLOW_TEST_DATABASE_URL` at `orderflow` or production. The current payment integration is deliberately a mock provider; a real provider lookup is needed before reconciliation can automatically repair a missed callback.
-
-Admin reporting is available at `GET /admin/reports/orders`, `GET /admin/reports/sales` and `GET /admin/reports/inventory`; all require an ADMIN bearer token.
-
-## Final HLD/LLD after reliability update
-
-The editable diagram sources are in `docs/diagrams/HLD.mmd`, `docs/diagrams/LLD.mmd`, and `docs/diagrams/ORDER_PAYMENT_STATE.mmd`. These diagrams include the simulated-provider ledger, request metrics, and the callback-recovery path.
-
-### Current HLD
-```mermaid
-flowchart LR
-    Client[Customer / ADMIN / Postman] --> API[Gin REST API]
-    API --> Request[Request ID, DTO validation, JWT/roles]
-    Request --> Services[Product / Order / Inventory / Payment services]
-    Services --> PostgreSQL[(PostgreSQL source of truth)]
-    Services -. optional catalog cache .-> Redis[(Redis, TTL + invalidation)]
-    PostgreSQL --> ProviderLedger[(Mock provider outcome ledger)]
-    Worker[Expiry + provider reconciliation workers] --> Services
-    API --> Metrics[/metrics: request counts + duration histogram/]
-    CI[GitHub Actions] -. tests and container smoke .-> API
+```bash
+# Current shell must have ORDERFLOW_TEST_DATABASE_URL set to orderflow_test.
+go test -run='^$' -bench='BenchmarkOrderHistoryList' -benchtime=100ms -benchmem -count=1 ./internal/integration/...
 ```
 
-### Current LLD: missed callback recovery
-```mermaid
-sequenceDiagram
-    participant P as Mock provider ledger
-    participant W as Reconciliation worker
-    participant S as Payment service
-    participant R as Payment repository
-    participant DB as PostgreSQL
-    P-->>W: Known SUCCESS/FAILED outcome
-    W->>S: ReconcileKnownMockProviderOutcomes
-    S->>S: Reuse ProcessMockCallback validation/state path
-    S->>R: Lock and apply payment/order/stock transition
-    R->>DB: Commit status + movement audit atomically
-    S-->>W: Recovered count / error
+For the complete product-list HTTP P50/P95 comparison, run the standalone API benchmark, wait for its exit, and keep its output:
+
+```bash
+./scripts/benchmark-api-cache.sh
 ```
 
-## Final verification and submission
+Do not run the order-flow benchmark and API benchmark as one long chained command; each writes its own timestamped file under `docs/evidence/performance/`.
 
-- [Mock-provider recovery and HTTP observability](docs/MOCK_PROVIDER_RECOVERY_AND_OBSERVABILITY.md)
-- [Submission portal checklist](docs/FINAL_SUBMISSION_GUIDE.md)
-- [Evidence and screenshot checklist](docs/evidence/README.md)
-- HLD and LLD source diagrams are maintained in `docs/diagrams/`; the rendered diagrams are also included below in this README.
+## Docker and CI
 
-`GET /metrics` exposes request counters and a duration histogram. `X-Request-ID` is returned on every HTTP response. Redis remains optional and defaults off because the latest local product-list benchmark was slower with the warm cache; do not claim a cache speedup without a new representative benchmark.
+`Dockerfile` is a multi-stage build. The GitHub Actions workflow (`.github/workflows/ci.yml`) runs on pushes and pull requests to `main`, starts temporary PostgreSQL and Redis service containers, checks module tidiness, applies migrations, runs tests/race/vet, checks whitespace, builds the image and smoke-tests `/health` and `/ready` inside a container.
+
+- Verified commit: `1515cb0`
+- Successful run: <https://github.com/manmohansharma21/orderflow/actions/runs/39160539244>
+
+**CI means Continuous Integration.** It is an automated quality gate that repeats validation consistently when code changes. Learn the job step-by-step in `docs/CI_CONFIGURATION_WALKTHROUGH.md`; the tracker intentionally keeps this walkthrough as a learning task.
+
+## HLD, LLD and design documentation
+
+Editable diagrams:
+- `docs/diagrams/HLD.mmd`
+- `docs/diagrams/LLD.mmd`
+- `docs/diagrams/ORDER_PAYMENT_STATE.mmd`
+
+The README above embeds HLD, LLD and state diagrams so they render directly in GitHub Markdown. `docs/openapi.yaml`, `docs/OPENAPI_GUIDE.md`, `docs/DESIGN_PATTERNS.md` and `docs/REDIS_AND_RECONCILIATION.md` provide related detail. Keep diagrams and API contracts synchronized if endpoints or transitions change.
+
+## Screenshots and report: final-stage procedure
+
+**Do this only after code is verified, the exact HEAD has green CI, the Postman flow is run, and benchmarks needed for the report are completed.** Save real PNG screenshots into the repository using the exact paths in `docs/evidence/README.md`. Use a demo dataset and keep tokens, passwords, signatures, account IDs and environment values off-screen.
+
+On macOS, press **Command + Shift + 4**, drag to select the evidence region, and save the PNG into the named `docs/evidence/...` folder. Prefer a useful window crop showing request/command and successful result over a full desktop capture. In Postman, keep the request name, method/path, status and response JSON visible, but do not expose the Authorization tab/token or webhook secret. Use markup to permanently redact any accidental sensitive text before committing the PNG. For the CI evidence use the green completed run for the exact submitted SHA. For AWS, capture only if an actual approved deployment was performed and the evaluation requires it.
+
+The final evidence session is described in `docs/SCREENSHOT_CHECKLIST.md` and `docs/evidence/README.md`; the same PNGs must be inserted into the corresponding figure placeholders in the Word report before exporting the submission PDF.
+
+## Scaler submission checklist
+
+The portal screenshot shows three separate deliverables: (1) public GitHub URL, (2) project ZIP up to 50 MB, and (3) report PDF up to 50 MB. The Word report is the editable working copy; **the report field expects PDF**.
+
+1. Commit/push the final code, README, diagrams, screenshot evidence and actual benchmark output.
+2. Wait for the Actions run for that exact HEAD SHA to be green.
+3. Download the full archive from the current `main` branch: <https://github.com/manmohansharma21/orderflow/archive/refs/heads/main.zip>. This is the complete source archive—not one of the incremental patch ZIPs used during development.
+4. Review the archive and ensure `.env`, secrets, database dumps and generated report drafts are absent.
+5. Complete and personally review the Word report: registered email, actual project module start/end dates, actual submission date, references, screenshot figures and institutional AI-use disclosure. Sign your own declaration only if accurate; do not sign the supervisor certification.
+6. Export that final Word document to PDF and visually check all pages. Upload the PDF separately in the portal's **Upload Project Report** field.
+7. Read both portal declarations and check them yourself only if they are true.
+
+## Scope boundaries and limitations
+
+- No real Stripe/money-moving gateway is implemented; simulated provider callbacks and recovery are used as the capstone test mechanism.
+- Redis did not speed up the measured small local workload; further performance claims require new measurement.
+- AWS infrastructure is documented, not deployed. Only claim live AWS after creating resources with approval and verifying the live endpoint. Whether a live AWS deployment is mandatory must be confirmed against any separate assignment/contest rubric; the supplied submission screen itself requests a repo link, project ZIP, report PDF and declarations, not an AWS URL.
+- Screenshots and final report PDF are a last-mile evidence task. This source README is the operating guide; the Word report is maintained separately from the code ZIP.
