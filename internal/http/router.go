@@ -42,10 +42,38 @@ func NewRouter(pool databasePinger, readinessTimeoutSeconds int) *gin.Engine {
 	})
 
 	if dbPool, ok := pool.(*pgxpool.Pool); ok {
+		// Authentication routes
+		auth := newAuthHandler(dbPool)
+
+		router.POST("/auth/register", auth.register)
+		router.POST("/auth/login", auth.login)
+
+		// Protected profile route
+		router.GET("/profile", AuthRequired(), func(c *gin.Context) {
+			c.JSON(http.StatusOK, gin.H{
+				"user_id": c.GetString("user_id"),
+				"role":    c.GetString("user_role"),
+			})
+		})
+
+		// Admin-only example route
+		router.POST(
+			"/admin/example",
+			AuthRequired(),
+			RequireRole("ADMIN"),
+			func(c *gin.Context) {
+				c.JSON(http.StatusOK, gin.H{
+					"status": "admin access granted",
+				})
+			},
+		)
+
+		// Orders
 		orderRepo := repository.NewOrderRepository(dbPool)
 		orderService := service.NewOrderService(orderRepo)
-		router.POST("/orders", newOrderHandler(orderService).createOrder)
+		router.POST("/orders", AuthRequired(), newOrderHandler(orderService).createOrder)
 
+		// Products
 		productRepo := repository.NewProductRepository(dbPool)
 		productService := service.NewProductService(productRepo)
 		products := newProductHandler(productService)
