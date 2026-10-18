@@ -31,3 +31,10 @@ go test -race -count=1 ./internal/integration/...
 go vet ./...
 docker build -t orderflow:local .
 ```
+
+
+## Reliability additions
+
+The `000007_order_payment_reliability` migration introduces per-customer order idempotency columns/index, payment currency and failure reason, and the `EXPIRED` order status. The order worker expires aged unpaid orders only if they have no pending/successful payment. It does not release inventory while a payment status is unresolved. The scheduled payment reconciliation worker currently emits a read-only report of stale or inconsistent records; it does not claim provider-side recovery because the mock provider has no independent status-lookup interface.
+
+Successful callbacks now consume both on-hand and reserved stock and write `ORDER_FULFILLED` movements. External callback bodies must include amount and currency, and failed callbacks must include a meaningful failure reason.

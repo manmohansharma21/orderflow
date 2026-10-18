@@ -23,8 +23,6 @@ vendor/
 # Temporary files
 tmp/
 temp/
-EOF
 
-# Local Go executable
-/api
-
+# Local generated report drafts are not submission-ready
+submission/*_DRAFT.*

@@ -10,14 +10,12 @@ fi
 command -v go >/dev/null || { echo "ERROR: Go 1.26+ is required by go.mod." >&2; exit 2; }
 command -v docker >/dev/null || { echo "ERROR: Docker is required for the Redis-backed checks." >&2; exit 2; }
 
-docker compose up -d redis
+docker compose up -d postgres redis
+./scripts/apply-reliability-migration.sh
 export ORDERFLOW_REDIS_TEST_ADDR="${ORDERFLOW_REDIS_TEST_ADDR:-localhost:6379}"
 
 go mod tidy
-gofmt -w cmd/api/main.go internal/cache/*.go internal/config/config.go \
-  internal/http/router.go internal/integration/product_cache_test.go \
-  internal/repository/product_repository_adapter.go internal/service/product_cache.go \
-  internal/service/product_service.go internal/worker/*.go
+find cmd internal -name '*.go' -print0 | xargs -0 gofmt -w
 
 go test -count=1 ./...
 go test -race -count=1 ./internal/integration/...

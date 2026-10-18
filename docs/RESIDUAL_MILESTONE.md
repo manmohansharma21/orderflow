@@ -1,42 +1,48 @@
-# Residual implementation milestone: Redis, worker, Docker smoke test
+# OrderFlow reliability completion milestone
 
-This overlay adds optional Redis product caching, TTL and generation-based invalidation; a read-only scheduled payment reconciliation reporter; and CI checks for PostgreSQL, Redis, Docker build and container readiness.
+This overlay extends the existing Redis/Docker bundle to close the remaining application-level items identified in the OrderFlow project specification. See `ORDERFLOW_RELIABILITY_COMPLETION_INSTRUCTIONS.md` for the single extraction/verification/commit workflow. Extract it into the repository root. It does not include credentials, database dumps, or the generated DOCX/PDF working draft.
 
-## Install safely
+## Implemented in this overlay (must pass local verification and new CI)
 
-Unzip this bundle into the repository root. It deliberately does not include `.env`, database dumps, or credentials. It replaces the product service, configuration, router, main composition root, Docker Compose, CI workflow, README/report text, and HLD source.
+- Multi-product order requests (up to 50 distinct products), backend price snapshots, and atomic reservations.
+- Required `Idempotency-Key` for HTTP order creation; same-key/same-payload replay returns the original result, while changed payload returns `409 Conflict`.
+- Mock callback amount/currency verification and persisted failed-payment reason.
+- Successful payment atomically consumes on-hand and reserved stock and records `ORDER_FULFILLED`; replay does not consume twice.
+- Periodic unpaid-order expiry releases reservations only if there is no pending/successful payment. The worker checks status/payment under the transaction after locking candidate rows.
+- Admin order, sales/payment, and low-stock inventory summary endpoints.
+- Redis product list/detail TTL caching plus mutation invalidation.
+- Actual-measurement benchmark command for direct PostgreSQL list reads versus warm Redis cache.
+- Reliability integration tests, migration `000007`, CI configuration learning guide, and updated OpenAPI/README/report source.
 
-## Verify with one command
+## One verification path
 
-Keep `ORDERFLOW_TEST_DATABASE_URL` set to the existing dedicated database named exactly `orderflow_test`, as documented in `INTEGRATION_TESTING_MILESTONE.md`, then run:
+Use Go 1.26+, Docker and the dedicated local `orderflow_test` database. Keep `ORDERFLOW_TEST_DATABASE_URL` set to that database as described in `INTEGRATION_TESTING_MILESTONE.md`. From the repository root:
 
 ```bash
-chmod +x scripts/verify-residual-milestone.sh scripts/docker-smoke-test.sh
+chmod +x scripts/*.sh
 ./scripts/verify-residual-milestone.sh
+./scripts/docker-smoke-test.sh
+./scripts/benchmark-product-cache.sh
 ```
 
-The verification script starts the local Redis service, runs `go mod tidy` (this updates `go.sum`), formats the added/updated Go files, runs all tests, race-enabled PostgreSQL integration tests, `go vet`, and `git diff --check`. Redis checks run against DB 14 and DB 15 of the project's disposable local Redis service. Do not use those DBs for production data.
+`verify-residual-milestone.sh` starts local PostgreSQL/Redis, applies only migration 000007 to database names exactly `orderflow` and `orderflow_test` if it is not already present, then runs `go mod tidy`, formatting, all tests, integration race tests, `go vet` and whitespace checks. It refuses to use any other DB name for the test connection. The smoke script builds and starts the container, then probes `/health` and `/ready`. The benchmark emits real measurements from your machine; copy only those measured values into the report.
 
-Then run the container build and live API smoke test:
+If a command fails, do not commit. Share the first failing command and output (with all connection details/secrets removed) and fix it before proceeding.
+
+## Correct commit hygiene
+
+Before staging, unstage the unpersonalized local draft report files if they were staged by an earlier `git add`:
 
 ```bash
-./scripts/docker-smoke-test.sh
+git restore --staged submission/OrderFlow_Applied_Software_Project_Report_DRAFT.docx submission/OrderFlow_Applied_Software_Project_Report_DRAFT.pdf 2>/dev/null || true
 ```
 
-This uses `.env` locally without printing its values, builds the image, starts an ephemeral container, and checks `/health` and `/ready`. It expects your development PostgreSQL schema/migrations to be applied. It will start Compose PostgreSQL/Redis services, but will not drop or recreate any database.
+Review `git status --short`, `git diff --cached --check`, and `git diff --cached --stat`. Never commit `.env`, passwords, JWTs, mock webhook secrets, SQL dumps, or the draft Word/PDF report. The final PDF and final submission ZIP must be produced after code/CI verification, real benchmark results, and the end-of-project evidence session.
 
-## Commit and push
+## What cannot be honestly completed by this code overlay alone
 
-After the commands above all pass, inspect staged/modified files and check that `.env`, tokens, database dumps or real secrets are not staged. Add the exact paths from your `git status --short`, including `go.mod` and `go.sum` if changed. Then commit and push. The post-push green GitHub Actions run is required before calling this milestone verified.
-
-## Current capstone-spec gaps that still need a code milestone
-
-Before final submission, verify/fix multi-product orders, order-creation idempotency, callback amount/currency and failure-reason validation, stock consumption after payment success, automated expiry release, required admin reporting, and benchmark evidence against the project spec. These are intentionally not declared complete by adding Redis or a reconciliation-reporting worker.
-
-## Behavior and limitations
-
-Redis cache failures fall back to PostgreSQL. Product writes increment a generation key after a successful database mutation; old generation keys expire by TTL. If Redis invalidation fails during an outage, old values may remain visible until their TTL expires, and the service logs a warning.
-
-The reconciliation worker is read-only. It logs stale pending payments and inconsistent order/payment states from the existing report; it does not charge, refund, or mutate status. `RECONCILIATION_INTERVAL_SECONDS=0` disables the worker.
-
-`go-redis/v9` is set to `v9.23.0`, which is compatible with this repository's Go 1.26 module directive. `go mod tidy` must refresh `go.sum` locally before commit.
+- A new green GitHub Actions run for the exact reliability commit (requires push and hosted run).
+- Performance result values (must be measured by the benchmark).
+- AWS deployment (requires account access, region/network choices, and approval of any billable resources).
+- Real payment-provider reconciliation. The current payment provider is deliberately mock; the periodic reconciliation reporter is read-only because there is no real provider lookup contract.
+- The final report screenshots/evidence, PDF export, previous Lambda deployment review, and learning walkthrough. Screenshots are intentionally deferred until the end.

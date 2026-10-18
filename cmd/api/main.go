@@ -59,6 +59,13 @@ func main() {
 	} else {
 		log.Printf("payment reconciliation worker disabled")
 	}
+	if cfg.OrderExpiryIntervalSeconds > 0 {
+		expiryOrders := service.NewOrderService(repository.NewOrderRepository(pool))
+		go worker.RunPeriodicOrderExpiry(workerCtx, expiryOrders, time.Duration(cfg.OrderExpiryIntervalSeconds)*time.Second, cfg.OrderExpiryAfterMinutes, cfg.OrderExpiryBatchSize, log.Default())
+		log.Printf("unpaid-order expiry worker enabled: interval=%ds age=%dm batch=%d", cfg.OrderExpiryIntervalSeconds, cfg.OrderExpiryAfterMinutes, cfg.OrderExpiryBatchSize)
+	} else {
+		log.Printf("unpaid-order expiry worker disabled")
+	}
 
 	server := &http.Server{Addr: ":" + cfg.Port, Handler: router, ReadHeaderTimeout: 5 * time.Second}
 	go func() {

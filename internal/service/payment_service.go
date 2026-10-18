@@ -18,6 +18,7 @@ var (
 	ErrPaymentConflict       = errors.New("payment state conflict")
 	ErrIdempotencyConflict   = errors.New("idempotency key conflict")
 	ErrInvalidPaymentOutcome = errors.New("invalid payment outcome")
+	ErrPaymentAmountMismatch = errors.New("payment callback amount or currency mismatch")
 )
 
 type PaymentService struct {
@@ -53,7 +54,7 @@ func (s *PaymentService) CreateForOrder(
 
 func (s *PaymentService) ProcessMockCallback(
 	ctx context.Context,
-	paymentID, outcome, eventID string,
+	paymentID, outcome, eventID string, details ...domain.PaymentCallbackDetails,
 ) (domain.Payment, error) {
 	paymentID = strings.TrimSpace(paymentID)
 	outcome = strings.ToUpper(strings.TrimSpace(outcome))
@@ -64,7 +65,14 @@ func (s *PaymentService) ProcessMockCallback(
 	if outcome != "SUCCESS" && outcome != "FAILED" {
 		return domain.Payment{}, ErrInvalidPaymentOutcome
 	}
-	p, err := s.repo.ProcessMockCallback(ctx, paymentID, outcome, eventID)
+	if len(details) > 0 {
+		details[0].Currency = strings.ToUpper(strings.TrimSpace(details[0].Currency))
+		details[0].FailureReason = strings.TrimSpace(details[0].FailureReason)
+		if details[0].AmountPaise < 0 || len(details[0].Currency) != 3 || (outcome == "FAILED" && len(details[0].FailureReason) < 3) {
+			return domain.Payment{}, ErrInvalidPaymentRequest
+		}
+	}
+	p, err := s.repo.ProcessMockCallback(ctx, paymentID, outcome, eventID, details...)
 	switch {
 	case errors.Is(err, pgx.ErrNoRows):
 		return domain.Payment{}, ErrPaymentNotFound
@@ -72,6 +80,8 @@ func (s *PaymentService) ProcessMockCallback(
 		return domain.Payment{}, ErrIdempotencyConflict
 	case errors.Is(err, repository.ErrPaymentStateConflict):
 		return domain.Payment{}, ErrPaymentConflict
+	case errors.Is(err, repository.ErrPaymentAmountMismatch):
+		return domain.Payment{}, ErrPaymentAmountMismatch
 	default:
 		return p, err
 	}

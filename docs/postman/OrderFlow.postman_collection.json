@@ -65,6 +65,36 @@
     {
       "key": "failurePaymentId",
       "value": ""
+    },
+    {
+      "key": "orderIdempotencyKey",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "lastOrderIdempotencyKey",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "paymentAmountPaise",
+      "value": "0",
+      "type": "string"
+    },
+    {
+      "key": "paymentCurrency",
+      "value": "INR",
+      "type": "string"
+    },
+    {
+      "key": "failurePaymentAmountPaise",
+      "value": "0",
+      "type": "string"
+    },
+    {
+      "key": "failurePaymentCurrency",
+      "value": "INR",
+      "type": "string"
     }
   ],
   "item": [
@@ -351,6 +381,11 @@
           {
             "key": "Content-Type",
             "value": "application/json"
+          },
+          {
+            "key": "Idempotency-Key",
+            "value": "{{orderIdempotencyKey}}",
+            "type": "text"
           }
         ],
         "url": "{{baseUrl}}/orders",
@@ -378,11 +413,21 @@
       "response": [],
       "event": [
         {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.collectionVariables.set('orderIdempotencyKey', pm.variables.replaceIn('{{$guid}}'));"
+            ]
+          }
+        },
+        {
           "listen": "test",
           "script": {
             "type": "text/javascript",
             "exec": [
-              "pm.test('order created', () => { pm.response.to.have.status(201); const j = pm.response.json(); pm.collectionVariables.set('orderId', j.order_id); pm.expect(j.status).to.eql('PENDING'); });"
+              "pm.test('order created', () => { pm.response.to.have.status(201); const j = pm.response.json(); pm.collectionVariables.set('orderId', j.order_id); pm.expect(j.status).to.eql('PENDING'); });",
+              "if (pm.response.code === 201) { pm.collectionVariables.set('lastOrderAmountPaise', pm.response.json().total_amount_paise); pm.collectionVariables.set('lastOrderIdempotencyKey', pm.request.headers.get('Idempotency-Key')); }"
             ]
           }
         }
@@ -480,7 +525,8 @@
           "script": {
             "type": "text/javascript",
             "exec": [
-              "pm.test('payment initiation returns 201', () => { pm.response.to.have.status(201); const j = pm.response.json(); pm.collectionVariables.set('paymentId', j.id); });"
+              "pm.test('payment initiation returns 201', () => { pm.response.to.have.status(201); const j = pm.response.json(); pm.collectionVariables.set('paymentId', j.id); });",
+              "const j = pm.response.json(); pm.collectionVariables.set('paymentAmountPaise', j.amount_paise); pm.collectionVariables.set('paymentCurrency', j.currency || 'INR');"
             ]
           }
         }
@@ -504,7 +550,7 @@
         "description": "Mock provider only. Set mockPaymentWebhookSecret. The signature script signs the exact variable-expanded raw JSON body.",
         "body": {
           "mode": "raw",
-          "raw": "{\n  \"payment_id\": \"{{paymentId}}\",\n  \"outcome\": \"SUCCESS\",\n  \"event_id\": \"evt-{{eventSuffix}}\"\n}",
+          "raw": "{\n  \"payment_id\": \"{{paymentId}}\",\n  \"outcome\": \"SUCCESS\",\n  \"event_id\": \"evt-{{eventSuffix}}\",\n  \"amount_paise\": {{paymentAmountPaise}},\n  \"currency\": \"{{paymentCurrency}}\"\n}",
           "options": {
             "raw": {
               "language": "json"
@@ -612,6 +658,11 @@
           {
             "key": "Content-Type",
             "value": "application/json"
+          },
+          {
+            "key": "Idempotency-Key",
+            "value": "{{orderIdempotencyKey}}",
+            "type": "text"
           }
         ],
         "url": "{{baseUrl}}/orders",
@@ -639,11 +690,21 @@
       "response": [],
       "event": [
         {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.collectionVariables.set('orderIdempotencyKey', pm.variables.replaceIn('{{$guid}}'));"
+            ]
+          }
+        },
+        {
           "listen": "test",
           "script": {
             "type": "text/javascript",
             "exec": [
-              "pm.test('second order created', () => { pm.response.to.have.status(201); const j = pm.response.json(); pm.collectionVariables.set('failureOrderId', j.order_id); pm.expect(j.status).to.eql('PENDING'); });"
+              "pm.test('second order created', () => { pm.response.to.have.status(201); const j = pm.response.json(); pm.collectionVariables.set('failureOrderId', j.order_id); pm.expect(j.status).to.eql('PENDING'); });",
+              "if (pm.response.code === 201) { pm.collectionVariables.set('lastOrderAmountPaise', pm.response.json().total_amount_paise); pm.collectionVariables.set('lastOrderIdempotencyKey', pm.request.headers.get('Idempotency-Key')); }"
             ]
           }
         }
@@ -679,7 +740,9 @@
           "script": {
             "type": "text/javascript",
             "exec": [
-              "pm.test('failure payment initiated', () => { pm.response.to.have.status(201); pm.collectionVariables.set('failurePaymentId', pm.response.json().id); });"
+              "pm.test('failure payment initiated', () => { pm.response.to.have.status(201); pm.collectionVariables.set('failurePaymentId', pm.response.json().id); });",
+              "const j = pm.response.json(); pm.collectionVariables.set('paymentAmountPaise', j.amount_paise); pm.collectionVariables.set('paymentCurrency', j.currency || 'INR');",
+              "const j = pm.response.json(); pm.collectionVariables.set('failurePaymentAmountPaise', j.amount_paise); pm.collectionVariables.set('failurePaymentCurrency', j.currency || 'INR');"
             ]
           }
         }
@@ -703,7 +766,7 @@
         "description": "Exercise failure handling: order should become FAILED and reserved stock should be released once.",
         "body": {
           "mode": "raw",
-          "raw": "{\n  \"payment_id\": \"{{failurePaymentId}}\",\n  \"outcome\": \"FAILED\",\n  \"event_id\": \"evt-{{eventSuffix}}\"\n}",
+          "raw": "{\n  \"payment_id\": \"{{failurePaymentId}}\",\n  \"outcome\": \"FAILED\",\n  \"event_id\": \"evt-{{eventSuffix}}\",\n  \"amount_paise\": {{failurePaymentAmountPaise}},\n  \"currency\": \"{{failurePaymentCurrency}}\",\n  \"failure_reason\": \"provider_declined\"\n}",
           "options": {
             "raw": {
               "language": "json"
@@ -740,6 +803,66 @@
           }
         }
       ]
+    },
+    {
+      "name": "18 - Admin orders report",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/admin/reports/orders",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{adminToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "description": "ADMIN-only reporting endpoint."
+      },
+      "response": []
+    },
+    {
+      "name": "19 - Admin sales report",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/admin/reports/sales",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{adminToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "description": "ADMIN-only reporting endpoint."
+      },
+      "response": []
+    },
+    {
+      "name": "20 - Admin inventory report",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/admin/reports/inventory?low_stock_threshold=5",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{adminToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "description": "ADMIN-only reporting endpoint."
+      },
+      "response": []
     }
   ]
 }

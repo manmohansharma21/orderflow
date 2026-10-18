@@ -292,15 +292,33 @@ paths:
       tags: [Orders]
       summary: Create an order and reserve stock
       security: [{BearerAuth: []}]
+      parameters:
+        - in: header
+          name: Idempotency-Key
+          required: true
+          schema: {type: string, minLength: 8, maxLength: 200}
+          description: Replays an identical payload; reuse with a different payload returns 409.
       requestBody:
         required: true
         content:
           application/json:
             schema: {$ref: '#/components/schemas/CreateOrderRequest'}
-            example: {product_id: '308e809b-1ace-455a-b089-2c4da6be8e23', quantity: 1}
+            examples:
+              multiProduct:
+                value:
+                  items:
+                    - {product_id: '308e809b-1ace-455a-b089-2c4da6be8e23', quantity: 1}
+                    - {product_id: '408e809b-1ace-455a-b089-2c4da6be8e23', quantity: 2}
+              legacySingleProduct:
+                value: {product_id: '308e809b-1ace-455a-b089-2c4da6be8e23', quantity: 1}
       responses:
+        '200':
+          description: Idempotent replay returned the original order result
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/CreateOrderResponse'}
         '201':
-          description: Order created in PENDING state
+          description: New order created in PENDING state
           content:
             application/json:
               schema: {$ref: '#/components/schemas/CreateOrderResponse'}
@@ -399,7 +417,7 @@ paths:
         content:
           application/json:
             schema: {$ref: '#/components/schemas/MockPaymentCallbackRequest'}
-            example: {payment_id: '22222222-2222-4222-8222-222222222222', outcome: SUCCESS, event_id: evt-unique-001}
+            example: {payment_id: '22222222-2222-4222-8222-222222222222', outcome: SUCCESS, event_id: evt-unique-001, amount_paise: 49900, currency: INR}
       responses:
         '200':
           description: Callback accepted or same-outcome replay acknowledged
@@ -410,6 +428,7 @@ paths:
         '401': {description: Invalid HMAC signature}
         '409': {$ref: '#/components/responses/Conflict'}
         '413': {description: Callback body larger than 64 KiB}
+        '422': {description: Callback amount or currency differs from the persisted payment}
         '503': {description: Mock webhook secret is not configured}
   /admin/payments/reconciliation:
     get:
@@ -431,6 +450,60 @@ paths:
         '401': {$ref: '#/components/responses/Unauthorized'}
         '403': {$ref: '#/components/responses/Forbidden'}
         '500': {$ref: '#/components/responses/ServerError'}
+  /admin/reports/orders:
+    get:
+      tags: [Administration]
+      summary: Order status counts and confirmed revenue
+      security: [{BearerAuth: []}]
+      responses:
+        '200':
+          description: Aggregate order report
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/OrdersOperationalReport'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+  /admin/reports/sales:
+    get:
+      tags: [Administration]
+      summary: Sales and payment totals for an inclusive date range
+      security: [{BearerAuth: []}]
+      parameters:
+        - in: query
+          name: from
+          schema: {type: string, format: date}
+          description: Optional start date; defaults to 29 days before today (UTC).
+        - in: query
+          name: to
+          schema: {type: string, format: date}
+          description: Optional inclusive end date; defaults to today (UTC).
+      responses:
+        '200':
+          description: Sales and payment summary
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/SalesReport'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+  /admin/reports/inventory:
+    get:
+      tags: [Administration]
+      summary: Inventory totals and low-stock products
+      security: [{BearerAuth: []}]
+      parameters:
+        - in: query
+          name: low_stock_threshold
+          schema: {type: integer, minimum: 0, maximum: 1000000, default: 5}
+      responses:
+        '200':
+          description: Active inventory aggregate and first 100 low-stock products
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/InventoryReport'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
 components:
   securitySchemes:
     BearerAuth:
@@ -620,10 +693,24 @@ components:
         page: {type: integer}
         limit: {type: integer}
         total: {type: integer, format: int64}
-    CreateOrderRequest:
+    CreateOrderLineRequest:
       type: object
       required: [product_id, quantity]
       properties:
+        product_id: {$ref: '#/components/schemas/UUID'}
+        quantity: {type: integer, minimum: 1, maximum: 10000}
+    CreateOrderRequest:
+      type: object
+      description: Provide either items (multi-product) or legacy single-product fields, not both. Duplicate product IDs are rejected.
+      oneOf:
+        - required: [items]
+        - required: [product_id, quantity]
+      properties:
+        items:
+          type: array
+          minItems: 1
+          maxItems: 50
+          items: {$ref: '#/components/schemas/CreateOrderLineRequest'}
         product_id: {$ref: '#/components/schemas/UUID'}
         quantity: {type: integer, minimum: 1, maximum: 10000}
     CreateOrderResponse:
@@ -631,7 +718,8 @@ components:
       required: [order_id, status, total_amount_paise]
       properties:
         order_id: {$ref: '#/components/schemas/UUID'}
-        status: {type: string, enum: [PENDING]}
+        status: {type: string, enum: [PENDING, CONFIRMED, FAILED, CANCELLED, EXPIRED]}
+        replayed: {type: boolean, description: True when an identical Idempotency-Key retry returned the original result}
         total_amount_paise: {type: integer, format: int64, minimum: 0}
     OrderItem:
       type: object
@@ -647,7 +735,7 @@ components:
       required: [id, status, total_amount_paise, created_at, updated_at, items]
       properties:
         id: {$ref: '#/components/schemas/UUID'}
-        status: {type: string, enum: [PENDING, CONFIRMED, CANCELLED, FAILED]}
+        status: {type: string, enum: [PENDING, CONFIRMED, CANCELLED, FAILED, EXPIRED]}
         total_amount_paise: {type: integer, format: int64, minimum: 0}
         created_at: {type: string, format: date-time}
         updated_at: {type: string, format: date-time}
@@ -662,7 +750,7 @@ components:
         total: {type: integer, format: int64}
     Payment:
       type: object
-      required: [id, order_id, provider, status, amount_paise, created_at, updated_at]
+      required: [id, order_id, provider, status, amount_paise, currency, created_at, updated_at]
       properties:
         id: {$ref: '#/components/schemas/UUID'}
         order_id: {$ref: '#/components/schemas/UUID'}
@@ -670,15 +758,67 @@ components:
         provider_payment_id: {type: string}
         status: {type: string, enum: [PENDING, SUCCESS, FAILED, REFUNDED]}
         amount_paise: {type: integer, format: int64, minimum: 0}
+        currency: {type: string, minLength: 3, maxLength: 3, example: INR}
+        failure_reason: {type: string}
         created_at: {type: string, format: date-time}
         updated_at: {type: string, format: date-time}
     MockPaymentCallbackRequest:
       type: object
-      required: [payment_id, outcome, event_id]
+      required: [payment_id, outcome, event_id, amount_paise, currency]
       properties:
         payment_id: {$ref: '#/components/schemas/UUID'}
         outcome: {type: string, enum: [SUCCESS, FAILED]}
         event_id: {type: string, minLength: 3, maxLength: 200}
+        amount_paise: {type: integer, format: int64, minimum: 0}
+        currency: {type: string, minLength: 3, maxLength: 3, example: INR}
+        failure_reason: {type: string, minLength: 3, description: Required for FAILED callbacks}
+    OrdersOperationalReport:
+      type: object
+      required: [generated_at, total_orders, pending_orders, confirmed_orders, failed_orders, cancelled_orders, expired_orders, confirmed_revenue_paise]
+      properties:
+        generated_at: {type: string, format: date-time}
+        total_orders: {type: integer, format: int64}
+        pending_orders: {type: integer, format: int64}
+        confirmed_orders: {type: integer, format: int64}
+        failed_orders: {type: integer, format: int64}
+        cancelled_orders: {type: integer, format: int64}
+        expired_orders: {type: integer, format: int64}
+        confirmed_revenue_paise: {type: integer, format: int64}
+    SalesReport:
+      type: object
+      required: [generated_at, from_date, to_date, confirmed_orders, confirmed_revenue_paise, successful_payments, successful_payment_paise, failed_payments, failed_payment_paise]
+      properties:
+        generated_at: {type: string, format: date-time}
+        from_date: {type: string, format: date}
+        to_date: {type: string, format: date}
+        confirmed_orders: {type: integer, format: int64}
+        confirmed_revenue_paise: {type: integer, format: int64}
+        successful_payments: {type: integer, format: int64}
+        successful_payment_paise: {type: integer, format: int64}
+        failed_payments: {type: integer, format: int64}
+        failed_payment_paise: {type: integer, format: int64}
+    InventoryReportItem:
+      type: object
+      required: [product_id, sku, name, on_hand_quantity, reserved_quantity, available_quantity]
+      properties:
+        product_id: {$ref: '#/components/schemas/UUID'}
+        sku: {type: string}
+        name: {type: string}
+        on_hand_quantity: {type: integer}
+        reserved_quantity: {type: integer}
+        available_quantity: {type: integer}
+    InventoryReport:
+      type: object
+      required: [generated_at, active_products, total_on_hand, total_reserved, total_available, low_stock_products, low_stock_threshold, low_stock_items]
+      properties:
+        generated_at: {type: string, format: date-time}
+        active_products: {type: integer, format: int64}
+        total_on_hand: {type: integer, format: int64}
+        total_reserved: {type: integer, format: int64}
+        total_available: {type: integer, format: int64}
+        low_stock_products: {type: integer, format: int64}
+        low_stock_threshold: {type: integer}
+        low_stock_items: {type: array, items: {$ref: '#/components/schemas/InventoryReportItem'}}
     ReconciliationIssue:
       type: object
       required: [issue_type, order_id, order_status, amount_paise, created_at, details]

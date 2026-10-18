@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -16,6 +17,7 @@ import (
 var (
 	ErrPaymentIdempotencyConflict = errors.New("payment idempotency key conflicts with an existing payment")
 	ErrPaymentStateConflict       = errors.New("payment or order state does not allow this operation")
+	ErrPaymentAmountMismatch      = errors.New("payment callback amount or currency does not match the payment")
 )
 
 type PaymentRepository struct {
@@ -30,7 +32,7 @@ func scanPayment(row pgx.Row) (domain.Payment, error) {
 	var p domain.Payment
 	err := row.Scan(
 		&p.ID, &p.OrderID, &p.Provider, &p.ProviderPaymentID,
-		&p.Status, &p.AmountPaise, &p.CreatedAt, &p.UpdatedAt,
+		&p.Status, &p.AmountPaise, &p.CreatedAt, &p.UpdatedAt, &p.Currency, &p.FailureReason,
 	)
 	return p, err
 }
@@ -38,7 +40,7 @@ func scanPayment(row pgx.Row) (domain.Payment, error) {
 const paymentColumns = `
 	id::text, order_id::text, provider,
 	COALESCE(provider_payment_id, ''), status, amount_paise,
-	created_at, updated_at
+	created_at, updated_at, currency, COALESCE(failure_reason, '')
 `
 
 func (r *PaymentRepository) CreateOrGetPending(
@@ -128,7 +130,7 @@ func (r *PaymentRepository) CreateOrGetPending(
 
 func (r *PaymentRepository) ProcessMockCallback(
 	ctx context.Context,
-	paymentID, outcome, eventID string,
+	paymentID, outcome, eventID string, details ...domain.PaymentCallbackDetails,
 ) (domain.Payment, error) {
 	tx, err := r.pool.BeginTx(ctx, pgx.TxOptions{})
 	if err != nil {
@@ -165,6 +167,14 @@ func (r *PaymentRepository) ProcessMockCallback(
 		return domain.Payment{}, err
 	}
 
+	// External callback payloads must match the amount and currency persisted at initiation.
+	if len(details) > 0 {
+		detail := details[0]
+		if detail.AmountPaise != p.AmountPaise || !strings.EqualFold(strings.TrimSpace(detail.Currency), strings.TrimSpace(p.Currency)) {
+			return domain.Payment{}, ErrPaymentAmountMismatch
+		}
+	}
+
 	// Replayed callbacks with the same terminal result are safe and idempotent.
 	if p.Status == outcome {
 		return p, nil
@@ -185,8 +195,8 @@ func (r *PaymentRepository) ProcessMockCallback(
 		return domain.Payment{}, err
 	}
 
-	// On success, confirm the order but keep its stock reserved until a later
-	// fulfillment step. On failure, release all order reservations atomically.
+	// A successful payment consumes both on-hand and reserved quantity. A failed
+	// payment releases reservations. Both paths and their audit movements are atomic.
 	if outcome == "FAILED" {
 		items, err := r.getOrderItemsForUpdate(ctx, tx, p.OrderID)
 		if err != nil {
@@ -222,6 +232,37 @@ func (r *PaymentRepository) ProcessMockCallback(
 				return domain.Payment{}, err
 			}
 		}
+	} else {
+		items, err := r.getOrderItemsForUpdate(ctx, tx, p.OrderID)
+		if err != nil {
+			return domain.Payment{}, err
+		}
+		if len(items) == 0 {
+			return domain.Payment{}, ErrPaymentStateConflict
+		}
+		for _, item := range items {
+			var onHandAfter, reservedAfter int
+			err := tx.QueryRow(ctx, `
+				UPDATE inventory
+				SET on_hand_quantity = on_hand_quantity - $2,
+				    reserved_quantity = reserved_quantity - $2, updated_at = NOW()
+				WHERE product_id = $1 AND on_hand_quantity >= $2 AND reserved_quantity >= $2
+				RETURNING on_hand_quantity, reserved_quantity
+			`, item.ProductID, item.Quantity).Scan(&onHandAfter, &reservedAfter)
+			if errors.Is(err, pgx.ErrNoRows) {
+				return domain.Payment{}, ErrPaymentStateConflict
+			}
+			if err != nil {
+				return domain.Payment{}, err
+			}
+			_, err = tx.Exec(ctx, `
+				INSERT INTO inventory_movements (product_id, movement_type, on_hand_delta, reserved_delta, on_hand_after, reserved_after, reason, reference_type, reference_id)
+				VALUES ($1, 'ORDER_FULFILLED', $2, $2, $3, $4, 'Reserved stock consumed after successful payment', 'ORDER', $5)
+			`, item.ProductID, -item.Quantity, onHandAfter, reservedAfter, p.OrderID)
+			if err != nil {
+				return domain.Payment{}, err
+			}
+		}
 	}
 
 	providerID := fmt.Sprintf("mock_%s", paymentID)
@@ -230,9 +271,10 @@ func (r *PaymentRepository) ProcessMockCallback(
 		SET status = $2,
 		    provider_payment_id = COALESCE(provider_payment_id, $3),
 		    callback_event_id = $4,
+		    failure_reason = CASE WHEN $2 = 'FAILED' THEN NULLIF($5, '') ELSE NULL END,
 		    updated_at = NOW()
 		WHERE id = $1 AND status = 'PENDING'
-	`, paymentID, outcome, providerID, eventID)
+	`, paymentID, outcome, providerID, eventID, callbackFailureReason(details))
 	if err != nil {
 		return domain.Payment{}, err
 	}
@@ -378,4 +420,11 @@ func (r *PaymentRepository) ReconciliationReport(
 		GeneratedAt: time.Now().UTC(), OlderThanMinutes: olderThanMinutes,
 		IssueCount: len(issues), Issues: issues,
 	}, nil
+}
+
+func callbackFailureReason(details []domain.PaymentCallbackDetails) string {
+	if len(details) == 0 {
+		return ""
+	}
+	return strings.TrimSpace(details[0].FailureReason)
 }

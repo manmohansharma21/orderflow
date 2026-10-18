@@ -65,9 +65,10 @@ flowchart TD
 ```mermaid
 stateDiagram-v2
     [*] --> PENDING: create order / reserve inventory
-    PENDING --> CONFIRMED: mock payment SUCCESS
+    PENDING --> CONFIRMED: mock payment SUCCESS / consume stock
     PENDING --> FAILED: mock payment FAILED / release reservation
     PENDING --> CANCELLED: customer cancellation / release reservation
+    PENDING --> EXPIRED: unpaid-order worker / release reservation
     CONFIRMED --> [*]
     FAILED --> [*]
     CANCELLED --> [*]
@@ -204,7 +205,7 @@ Full request/response schemas and status codes are in the OpenAPI file.
 - `available_quantity = on_hand_quantity - reserved_quantity`.
 - Order creation reserves inventory inside the same PostgreSQL transaction that writes order, item and movement rows. A failed operation rolls back those writes.
 - The mock payment callback signs the **exact raw request-body bytes** using HMAC-SHA256 and expects `X-Mock-Signature: sha256=<hex>`. Use the mock webhook secret; this is not a Stripe signature verifier.
-- A successful mock payment confirms the order and retains its reservation. A failed payment marks the order FAILED and releases the reservation once.
+- A successful mock payment confirms the order and consumes both on-hand and reserved stock with an ORDER_FULFILLED audit movement. A failed payment records a reason, marks the order FAILED and releases the reservation once.
 - Admin creation is not exposed as a public registration role; registered accounts start as CUSTOMER. For a local admin demo, promote a dedicated test user manually in the local database. Never expose a production database to a demo workflow.
 
 ## Redis and scheduled reconciliation
@@ -219,13 +220,26 @@ The GitHub Actions workflow now starts disposable PostgreSQL and Redis services,
 
 ## Finalization status
 
-Core Go APIs, models, services, repositories, migrations and automated tests are implemented. Redis caching and scheduled read-only reconciliation are included in this milestone, pending green CI confirmation. A live payment provider and AWS deployment are not claimed here. Track evidence in [`docs/SCREENSHOT_CHECKLIST.md`](docs/SCREENSHOT_CHECKLIST.md) and remaining work in [`docs/REMOTE_REVIEW_AND_REMAINING_WORK.md`](docs/REMOTE_REVIEW_AND_REMAINING_WORK.md).
+Core Go APIs, models, services, repositories, migrations and automated tests are implemented. Redis caching and scheduled read-only reconciliation are included; apply migration 000007 and verify the new reliability suite and CI before claiming that milestone as complete. A live payment provider and AWS deployment are not claimed here. Track evidence in [`docs/SCREENSHOT_CHECKLIST.md`](docs/SCREENSHOT_CHECKLIST.md) and remaining work in [`docs/REMOTE_REVIEW_AND_REMAINING_WORK.md`](docs/REMOTE_REVIEW_AND_REMAINING_WORK.md).
 
 
 ## Screenshot evidence and report
 
-The exact screenshot runbook is in [`docs/evidence/README.md`](docs/evidence/README.md). A formatted 53-page working draft of the Applied Software Project Report is included under `submission/` as DOCX and PDF. It deliberately identifies gaps and includes highlighted placeholders; replace these with truthful final details and real evidence before submitting.
+The exact screenshot runbook is in [`docs/evidence/README.md`](docs/evidence/README.md). The report source is maintained in `docs/PROJECT_REPORT.md`. A local DOCX/PDF working draft may exist under `submission/`, but those `*_DRAFT.*` files are intentionally ignored by Git and are not the final submission. Generate the submission report after final verification, actual benchmark measurements and the end-of-project evidence session.
 
 ## Residual code milestone (not yet verified on every developer machine)
 
-This branch overlay adds Redis-backed product-read caching with TTL/invalidation and a configurable read-only reconciliation worker. Run `scripts/verify-residual-milestone.sh` followed by `scripts/docker-smoke-test.sh`, commit the updated `go.mod`/`go.sum` when changed, push, and wait for green CI before describing these additions as verified. The original project specification still has gaps: multi-product order requests, order-level idempotency, provider amount/currency and failure-reason validation, stock-consumption semantics after payment success, expiry, reporting and performance benchmarks. See `docs/REMOTE_REVIEW_AND_REMAINING_WORK.md`.
+The reliability overlay additionally supports multi-product order requests, order-request idempotency, callback amount/currency validation and failure reasons, stock consumption on successful payment, safe unpaid-order expiry, and admin reporting. Run `scripts/verify-residual-milestone.sh`, then `scripts/docker-smoke-test.sh` and `scripts/benchmark-product-cache.sh`. These changes are not complete until the new tests pass and the new HEAD's GitHub Actions run is green. The benchmark must be run on your own environment; record measured values only. AWS deployment and real payment-provider status lookup remain external/environment-dependent work.
+
+
+## Reliability extensions (current completion bundle)
+
+- `POST /orders` accepts one legacy `product_id`/`quantity` payload or an `items` array of 1–50 distinct products. A required `Idempotency-Key` replays an identical request and returns 409 if the same key is reused with a different payload.
+- A valid successful mock-payment callback verifies the persisted amount and currency, marks the order `CONFIRMED`, consumes on-hand and reserved stock, and writes an `ORDER_FULFILLED` movement in one database transaction. A failed callback records `failure_reason` and releases reservations.
+- A periodic worker expires old `PENDING` orders only when there is no `PENDING` or `SUCCESS` payment. It deliberately does not expire an unresolved payment because the provider may have charged and the callback may be delayed.
+- Admin reports: `GET /admin/reports/orders`, `GET /admin/reports/sales?from=YYYY-MM-DD&to=YYYY-MM-DD`, and `GET /admin/reports/inventory?low_stock_threshold=5`.
+- `scripts/benchmark-api-cache.sh` measures actual `GET /products` p50/p95/mean latency and throughput with Redis disabled/enabled under a repeatable local request load; results are saved under `docs/evidence/performance/`. `scripts/benchmark-product-cache.sh` additionally compares repository-layer PostgreSQL and warm Redis list reads. Use measured outputs only.
+
+Apply new schema changes once to both your local development DB and the dedicated test DB by following `docs/RESIDUAL_MILESTONE.md`. Never point `ORDERFLOW_TEST_DATABASE_URL` at `orderflow` or production. The current payment integration is deliberately a mock provider; a real provider lookup is needed before reconciliation can automatically repair a missed callback.
+
+Admin reporting is available at `GET /admin/reports/orders`, `GET /admin/reports/sales` and `GET /admin/reports/inventory`; all require an ADMIN bearer token.

@@ -41,6 +41,7 @@ cleanup() { docker rm -f "$CONTAINER" >/dev/null 2>&1 || true; }
 trap cleanup EXIT
 
 docker compose up -d postgres redis
+./scripts/apply-reliability-migration.sh
 # Wait for both local dependencies without displaying connection credentials.
 for _ in $(seq 1 30); do
   if docker exec orderflow-postgres pg_isready -U orderflow -d orderflow >/dev/null 2>&1; then break; fi

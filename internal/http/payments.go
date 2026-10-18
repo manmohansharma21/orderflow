@@ -15,6 +15,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5"
 
+	"github.com/manmohansharma21/orderflow/internal/domain"
 	"github.com/manmohansharma21/orderflow/internal/service"
 )
 
@@ -23,9 +24,12 @@ type paymentHandler struct {
 }
 
 type mockPaymentCallbackRequest struct {
-	PaymentID string `json:"payment_id"`
-	Outcome   string `json:"outcome"`
-	EventID   string `json:"event_id"`
+	PaymentID     string `json:"payment_id"`
+	Outcome       string `json:"outcome"`
+	EventID       string `json:"event_id"`
+	AmountPaise   *int64 `json:"amount_paise"`
+	Currency      string `json:"currency"`
+	FailureReason string `json:"failure_reason"`
 }
 
 func newPaymentHandler(s *service.PaymentService) *paymentHandler {
@@ -92,8 +96,13 @@ func (h *paymentHandler) mockCallback(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid payment id"})
 		return
 	}
+	if req.AmountPaise == nil || strings.TrimSpace(req.Currency) == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "amount_paise and currency are required"})
+		return
+	}
+	details := domain.PaymentCallbackDetails{AmountPaise: *req.AmountPaise, Currency: req.Currency, FailureReason: req.FailureReason}
 	p, err := h.service.ProcessMockCallback(
-		c.Request.Context(), req.PaymentID, req.Outcome, req.EventID,
+		c.Request.Context(), req.PaymentID, req.Outcome, req.EventID, details,
 	)
 	if err != nil {
 		writePaymentError(c, err)
@@ -127,6 +136,8 @@ func writePaymentError(c *gin.Context, err error) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "order or payment not found"})
 	case errors.Is(err, service.ErrPaymentConflict):
 		c.JSON(http.StatusConflict, gin.H{"error": "payment or order state conflict"})
+	case errors.Is(err, service.ErrPaymentAmountMismatch):
+		c.JSON(http.StatusUnprocessableEntity, gin.H{"error": "callback amount or currency does not match the persisted payment"})
 	case errors.Is(err, service.ErrIdempotencyConflict):
 		c.JSON(http.StatusConflict, gin.H{"error": "idempotency key already used for another payment"})
 	default:

@@ -2,16 +2,24 @@ package domain
 
 import "time"
 
+type CreateOrderLineRequest struct {
+	ProductID string `json:"product_id"`
+	Quantity  int    `json:"quantity"`
+}
+
 type CreateOrderRequest struct {
-	UserID    string
-	ProductID string
-	Quantity  int
+	UserID         string
+	ProductID      string // legacy single-product request; normalized into Items
+	Quantity       int    // legacy single-product request; normalized into Items
+	Items          []CreateOrderLineRequest
+	IdempotencyKey string
 }
 
 type CreateOrderResult struct {
 	OrderID          string `json:"order_id"`
 	Status           string `json:"status"`
 	TotalAmountPaise int64  `json:"total_amount_paise"`
+	Replayed         bool   `json:"replayed,omitempty"`
 }
 
 type OrderItem struct {

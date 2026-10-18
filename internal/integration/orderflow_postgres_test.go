@@ -224,7 +224,7 @@ func TestInsufficientStockDoesNotCreatePartialOrder(t *testing.T) {
 	}
 }
 
-func TestSuccessfulPaymentConfirmsOrderAndKeepsReservation(t *testing.T) {
+func TestSuccessfulPaymentConfirmsOrderAndConsumesReservation(t *testing.T) {
 	f := newFixture(t, 3)
 	order := f.createOrder(t, 1)
 	paymentID := f.createPendingPayment(t, order)
@@ -242,19 +242,22 @@ func TestSuccessfulPaymentConfirmsOrderAndKeepsReservation(t *testing.T) {
 		t.Fatalf("expected CONFIRMED order, got %s", got)
 	}
 	onHand, reserved := f.inventory(t)
-	if onHand != 3 || reserved != 1 {
-		t.Fatalf("successful payment must retain reservation: on_hand=%d reserved=%d", onHand, reserved)
+	if onHand != 2 || reserved != 0 {
+		t.Fatalf("successful payment must consume one on-hand and reserved unit: on_hand=%d reserved=%d", onHand, reserved)
 	}
-	if got := f.movementCount(t, order.OrderID, "ORDER_RELEASED"); got != 0 {
-		t.Fatalf("successful payment should not release stock; got %d releases", got)
+	if got := f.movementCount(t, order.OrderID, "ORDER_FULFILLED"); got != 1 {
+		t.Fatalf("successful payment should record one ORDER_FULFILLED movement; got %d", got)
 	}
 
 	if _, err := payments.ProcessMockCallback(f.ctx, paymentID, "SUCCESS", eventID); err != nil {
 		t.Fatalf("replay successful callback: %v", err)
 	}
 	onHand, reserved = f.inventory(t)
-	if onHand != 3 || reserved != 1 {
+	if onHand != 2 || reserved != 0 {
 		t.Fatalf("replayed success changed inventory: on_hand=%d reserved=%d", onHand, reserved)
+	}
+	if got := f.movementCount(t, order.OrderID, "ORDER_FULFILLED"); got != 1 {
+		t.Fatalf("callback replay duplicated fulfillment movement: %d", got)
 	}
 }
 

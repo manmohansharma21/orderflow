@@ -81,9 +81,10 @@ sequenceDiagram
 ```mermaid
 stateDiagram-v2
     [*] --> PENDING: Create order / reserve stock
-    PENDING --> CONFIRMED: Payment SUCCESS
+    PENDING --> CONFIRMED: Payment SUCCESS / consume stock
     PENDING --> FAILED: Payment FAILED / release stock
     PENDING --> CANCELLED: Customer cancellation / release stock
+    PENDING --> EXPIRED: Unpaid-order expiry / release stock
     CONFIRMED --> [*]
     FAILED --> [*]
     CANCELLED --> [*]
@@ -131,7 +132,7 @@ go vet ./...
 git diff --check
 ```
 
-The PostgreSQL integration suite covers order stock reservation/audit movements, insufficient stock without a partial order, payment success, payment failure with one-time stock release, same-key idempotency, concurrent reservations, concurrent payment initiation, concurrent callback replay, and transaction rollback. Keep final terminal screenshots or CI run URLs in the submission evidence folder when available. The docs/CI bundle in the next commit should itself be validated before claiming its workflow passed.
+The PostgreSQL integration suite covers order stock reservation/audit movements, insufficient stock without a partial order, payment success (including inventory consumption), payment failure with one-time stock release, same-key order/payment idempotency, concurrent reservations, concurrent payment initiation, concurrent callback replay, expiry rollback/state, and transaction rollback. The suite and reliability changes must pass against the actual developer and CI databases before the report is marked final. Keep real terminal screenshots and the matching green CI URL in the submission evidence folder at the final evidence session.
 
 ## 10. Security considerations
 
@@ -154,3 +155,14 @@ The PostgreSQL integration suite covers order stock reservation/audit movements,
 ## 12. Conclusion
 
 OrderFlow implements the central backend path from product and inventory through transactional order creation and mock payment state changes, with a layered Go design and PostgreSQL-backed correctness controls. The next steps are to validate the added OpenAPI/CI/container/documentation files, capture submission evidence, and decide from the rubric whether Redis, live payment processing, scheduled reconciliation and AWS deployment must be completed before submission.
+
+
+## Reliability features added in the final code overlay (verification required)
+
+Order creation accepts either one legacy item or a multi-product `items` array. The server resolves all prices, sorts inventory locks, reserves each product, creates immutable order-item snapshots and records movement rows in a single PostgreSQL transaction. The HTTP API requires a per-request `Idempotency-Key`; repeated identical requests return the original order, while a key reused with a changed payload returns a conflict.
+
+Payment callbacks sent to the HTTP API include amount and currency. The callback handler verifies the HMAC over the raw body and compares amount/currency to the persisted payment before mutating state. A failure reason is stored on failed payments. A successful callback atomically confirms the order, decreases on-hand and reserved quantities, and records `ORDER_FULFILLED`; callback replay does not consume inventory twice.
+
+A periodic expiry worker releases reservations only for old PENDING orders with no PENDING or SUCCESS payment. Orders with unresolved payments are intentionally excluded because a delayed provider notification could indicate a charge already occurred. Scheduled payment reconciliation remains read-only for the mock provider until a provider status-lookup contract exists. Admin reports expose order status totals, date-filtered sales/payment sums and inventory/low-stock totals.
+
+`BenchmarkProductListDatabaseVsRedis` compares uncached PostgreSQL product listing to a warmed Redis hit. The final results section must include the actual `go test -bench` output and hardware/database details; no numerical improvement is claimed before a repeatable benchmark is run. AWS architecture is documented but a real deployment must be separately approved, performed and verified.

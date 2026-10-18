@@ -1,3 +1,7 @@
+# Screenshot checklist — final evidence session only
+
+Do not spend time capturing screenshots until the reliability milestone has passed local tests, has been committed/pushed, and its GitHub Actions run is green. Use real screenshots only; never paste credentials, bearer tokens, secret values, or unverified benchmark figures.
+
 # Submission evidence / screenshots checklist
 
 Save evidence to `docs/evidence/` (create the directory locally) and reference filenames in the report. Avoid capturing JWTs, passwords, database URLs, webhook secrets, or other credentials in screenshots.

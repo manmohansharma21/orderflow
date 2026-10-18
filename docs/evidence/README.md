@@ -23,8 +23,8 @@ Create these folders under `docs/evidence/`. Capture real results only; do not f
 4. In Word, replace the matching highlighted `[PASTE ACTUAL SCREENSHOT HERE]` / evidence note, insert the image, and add a numbered caption (for example, `Figure 14.01: GitHub Actions passed on commit <SHA>`).
 5. Update the report's List of Figures and pagination after all inserts. Never state a benchmark, cloud deployment, Redis verification, or workflow outcome that was not observed.
 
-## Current limitation that affects payment screenshots
-The currently committed implementation retains the order's reservation after a successful payment. The original project specification says successful reserved stock should become consumed stock. Resolve that behavioral difference and add a test before taking a screenshot that claims inventory has been consumed. Until then, a screenshot may show the actual current state but the report must disclose the discrepancy.
+## Final-stage accuracy gate
+This completion overlay changes successful payment to consume on-hand and reserved stock atomically and adds a regression test for replay. Do not capture the payment/stock-consumption evidence until this overlay's tests pass and the latest pushed commit has a green GitHub Actions run. If the observed result differs from the final code/report text, stop and fix the discrepancy rather than documenting an unsupported claim.
 
 ## CI learning checklist
 Read `.github/workflows/ci.yml` top to bottom: trigger, permissions, service containers and health checks, environment variables, checkout, Go setup, `go mod tidy` consistency check, migration loop, unit/integration tests, race tests, `go vet`, whitespace check, Docker build, container smoke test and health/readiness curl probes. After the Redis/worker bundle is committed, capture only the green run for that exact HEAD SHA.

@@ -9,8 +9,16 @@ type Payment struct {
 	ProviderPaymentID string    `json:"provider_payment_id,omitempty"`
 	Status            string    `json:"status"`
 	AmountPaise       int64     `json:"amount_paise"`
+	Currency          string    `json:"currency"`
+	FailureReason     string    `json:"failure_reason,omitempty"`
 	CreatedAt         time.Time `json:"created_at"`
 	UpdatedAt         time.Time `json:"updated_at"`
+}
+
+type PaymentCallbackDetails struct {
+	AmountPaise   int64
+	Currency      string
+	FailureReason string
 }
 
 type PaymentReconciliationIssue struct {

@@ -21,6 +21,9 @@ type Config struct {
 	ProductCacheTTLSeconds         int
 	ReconciliationIntervalSeconds  int
 	ReconciliationOlderThanMinutes int
+	OrderExpiryIntervalSeconds     int
+	OrderExpiryAfterMinutes        int
+	OrderExpiryBatchSize           int
 }
 
 func Load() (Config, error) {
@@ -53,6 +56,18 @@ func Load() (Config, error) {
 	if err != nil {
 		return Config{}, err
 	}
+	expiryInterval, err := intEnv("ORDER_EXPIRY_INTERVAL_SECONDS", 300, 0, 86400)
+	if err != nil {
+		return Config{}, err
+	}
+	expiryAge, err := intEnv("ORDER_EXPIRY_AFTER_MINUTES", 60, 1, 10080)
+	if err != nil {
+		return Config{}, err
+	}
+	expiryBatch, err := intEnv("ORDER_EXPIRY_BATCH_SIZE", 100, 1, 1000)
+	if err != nil {
+		return Config{}, err
+	}
 	redisEnabled, err := strconv.ParseBool(getEnv("REDIS_ENABLED", "true"))
 	if err != nil {
 		return Config{}, fmt.Errorf("REDIS_ENABLED must be true or false")
@@ -65,6 +80,7 @@ func Load() (Config, error) {
 		RedisDB: redisDB, ProductCacheTTLSeconds: cacheTTL,
 		ReconciliationIntervalSeconds:  reconcileInterval,
 		ReconciliationOlderThanMinutes: reconcileThreshold,
+		OrderExpiryIntervalSeconds:     expiryInterval, OrderExpiryAfterMinutes: expiryAge, OrderExpiryBatchSize: expiryBatch,
 	}, nil
 }
 

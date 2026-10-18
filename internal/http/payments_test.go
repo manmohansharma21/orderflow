@@ -104,7 +104,7 @@ func TestMockCallbackRejectsInvalidPaymentIDBeforeRepository(t *testing.T) {
 
 func TestMockCallbackRejectsUnsupportedOutcomeBeforeRepository(t *testing.T) {
 	t.Setenv("MOCK_PAYMENT_WEBHOOK_SECRET", testWebhookSecret)
-	body := `{"payment_id":"28e3f2b2-cfc8-4df9-8b6c-d0f7104c9b1d","outcome":"REFUNDED","event_id":"evt-test"}`
+	body := `{"payment_id":"28e3f2b2-cfc8-4df9-8b6c-d0f7104c9b1d","outcome":"REFUNDED","event_id":"evt-test","amount_paise":49900,"currency":"INR"}`
 	recorder := httptest.NewRecorder()
 	request := httptest.NewRequest(http.MethodPost, "/payments/mock-callback", strings.NewReader(body))
 	request.Header.Set("Content-Type", "application/json")
@@ -113,6 +113,19 @@ func TestMockCallbackRejectsUnsupportedOutcomeBeforeRepository(t *testing.T) {
 
 	if recorder.Code != http.StatusBadRequest {
 		t.Fatalf("expected %d, got %d: %s", http.StatusBadRequest, recorder.Code, recorder.Body.String())
+	}
+}
+
+func TestMockCallbackRequiresAmountAndCurrency(t *testing.T) {
+	t.Setenv("MOCK_PAYMENT_WEBHOOK_SECRET", testWebhookSecret)
+	body := `{"payment_id":"28e3f2b2-cfc8-4df9-8b6c-d0f7104c9b1d","outcome":"SUCCESS","event_id":"evt-test"}`
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodPost, "/payments/mock-callback", strings.NewReader(body))
+	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set("X-Mock-Signature", signTestPayload(testWebhookSecret, body))
+	paymentTestRouter().ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusBadRequest {
+		t.Fatalf("expected %d for missing amount/currency, got %d: %s", http.StatusBadRequest, recorder.Code, recorder.Body.String())
 	}
 }
 
