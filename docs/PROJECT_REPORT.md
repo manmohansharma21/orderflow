@@ -75,3 +75,14 @@ This local test showed Redis slower than direct PostgreSQL reads for the current
 A live AWS deployment is not claimed. The repository has an AWS deployment plan and target architecture. The Scaler portal screenshot requests a repo link, source ZIP, PDF report, and candidate confirmations; the displayed form does not itself show a live AWS URL field. Confirm any separate rubric/instructor requirement before incurring AWS costs. The mock payment provider is likewise the documented project boundary; real Stripe requires separate scope and credentials.
 
 Finish by running the final Postman collection, capturing genuine evidence, inserting images into the Word review draft, updating table/figure page numbers after layout settles, replacing only personal date placeholders with correct dates, checking citations and required AI-tool acknowledgement, and exporting a final PDF. The candidate must sign their own declaration; the supervisor certification should not be signed by the candidate.
+
+
+## Evidence refresh — 19 October 2026
+
+This section supersedes earlier status statements above where they refer to stale verification or benchmark state.
+
+- Verified implementation commit at this review: `3c708ab`; GitHub Actions passed at https://github.com/manmohansharma21/orderflow/actions/runs/39163364836.
+- Local `/health`, `/ready`, `/metrics` browser captures and an initial development server log are saved under `docs/evidence/`. The server log is supporting evidence only.
+- Product-list API benchmark: no cache P50 2.480 ms / P95 4.270 ms / 2,821.81 req/s; warm Redis P50 4.447 ms / P95 13.966 ms / 1,697.92 req/s. Redis was slower for this workload; no speedup is claimed.
+- Bounded service-level benchmark: order creation 1,848,705 ns/op (5,892 B/op, 112 allocs/op); order history 551,748 ns/op (19,837 B/op, 312 allocs/op). These are single-sample service/repository-path measurements, not HTTP latency percentiles.
+- Still needed for submission: final green-CI screenshot for the submitted SHA, Docker smoke/build screenshot, Postman business-flow screenshots, benchmark screenshot(s), metadata/reference checks, and Word-to-PDF export. AWS evidence is conditional on the rubric; the diagram is target architecture, not proof of deployment.
