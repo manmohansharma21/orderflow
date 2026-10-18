@@ -13,11 +13,17 @@ import (
 )
 
 var (
-	ErrProductNotFound   = errors.New("product not found")
-	ErrUserNotFound      = errors.New("user not found")
-	ErrInsufficientStock = errors.New("insufficient stock")
-	ErrInvalidOrder      = errors.New("invalid order")
+	ErrProductNotFound        = errors.New("product not found")
+	ErrUserNotFound           = errors.New("user not found")
+	ErrInsufficientStock      = errors.New("insufficient stock")
+	ErrInvalidOrder           = errors.New("invalid order")
+	ErrOrderNotFound          = errors.New("order not found")
+	ErrOrderNotCancellable    = errors.New("order is not cancellable")
+	ErrOrderInventoryConflict = errors.New("reserved inventory cannot be released")
+	ErrInvalidOrderQuery      = errors.New("invalid order query")
 )
+
+const maxOrderPage = 1_000_000
 
 type OrderService struct {
 	repo *repository.OrderRepository
@@ -55,9 +61,7 @@ func (s *OrderService) CreateOrder(
 	}
 	totalPaise := pricePaise * int64(req.Quantity)
 
-	reserved, onHandAfter, reservedAfter, err := s.repo.ReserveInventory(
-		ctx, tx, req.ProductID, req.Quantity,
-	)
+	reserved, onHandAfter, reservedAfter, err := s.repo.ReserveInventory(ctx, tx, req.ProductID, req.Quantity)
 	if err != nil {
 		return domain.CreateOrderResult{}, err
 	}
@@ -74,16 +78,11 @@ func (s *OrderService) CreateOrder(
 	}
 
 	if err := s.repo.RecordInventoryMovement(ctx, tx, domain.InventoryMovementInput{
-		ProductID:       req.ProductID,
-		MovementType:    "ORDER_RESERVED",
-		OnHandDelta:     0,
-		ReservedDelta:   req.Quantity,
-		OnHandAfter:     onHandAfter,
-		ReservedAfter:   reservedAfter,
-		Reason:          "Stock reserved for order creation",
-		CreatedByUserID: req.UserID,
-		ReferenceType:   "ORDER",
-		ReferenceID:     orderID,
+		ProductID: req.ProductID, MovementType: "ORDER_RESERVED",
+		OnHandDelta: 0, ReservedDelta: req.Quantity,
+		OnHandAfter: onHandAfter, ReservedAfter: reservedAfter,
+		Reason: "Stock reserved for order creation", CreatedByUserID: req.UserID,
+		ReferenceType: "ORDER", ReferenceID: orderID,
 	}); err != nil {
 		return domain.CreateOrderResult{}, err
 	}
@@ -95,9 +94,117 @@ func (s *OrderService) CreateOrder(
 		return domain.CreateOrderResult{}, err
 	}
 
-	return domain.CreateOrderResult{
-		OrderID:          orderID,
-		Status:           "PENDING",
-		TotalAmountPaise: totalPaise,
-	}, nil
+	return domain.CreateOrderResult{OrderID: orderID, Status: "PENDING", TotalAmountPaise: totalPaise}, nil
+}
+
+func (s *OrderService) ListForUser(
+	ctx context.Context,
+	userID string,
+	page int,
+	limit int,
+) (domain.OrderList, error) {
+	userID = strings.TrimSpace(userID)
+	if userID == "" {
+		return domain.OrderList{}, ErrInvalidOrderQuery
+	}
+	if page < 1 {
+		page = 1
+	}
+	if page > maxOrderPage {
+		return domain.OrderList{}, ErrInvalidOrderQuery
+	}
+	if limit < 1 {
+		limit = 20
+	}
+	if limit > 100 {
+		limit = 100
+	}
+	offset := int64(page-1) * int64(limit)
+	items, total, err := s.repo.ListForUser(ctx, userID, limit, offset)
+	if err != nil {
+		return domain.OrderList{}, err
+	}
+	return domain.OrderList{Items: items, Page: page, Limit: limit, Total: total}, nil
+}
+
+func (s *OrderService) GetForUser(
+	ctx context.Context,
+	userID string,
+	orderID string,
+) (domain.Order, error) {
+	userID = strings.TrimSpace(userID)
+	orderID = strings.TrimSpace(orderID)
+	if userID == "" || orderID == "" {
+		return domain.Order{}, ErrInvalidOrderQuery
+	}
+	order, err := s.repo.GetForUser(ctx, userID, orderID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return domain.Order{}, ErrOrderNotFound
+	}
+	return order, err
+}
+
+func (s *OrderService) CancelForUser(
+	ctx context.Context,
+	userID string,
+	orderID string,
+) (domain.Order, error) {
+	userID = strings.TrimSpace(userID)
+	orderID = strings.TrimSpace(orderID)
+	if userID == "" || orderID == "" {
+		return domain.Order{}, ErrInvalidOrderQuery
+	}
+
+	tx, err := s.repo.BeginTx(ctx)
+	if err != nil {
+		return domain.Order{}, err
+	}
+	defer tx.Rollback(ctx)
+
+	status, err := s.repo.LockOrderForCancellation(ctx, tx, userID, orderID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return domain.Order{}, ErrOrderNotFound
+	}
+	if err != nil {
+		return domain.Order{}, err
+	}
+	if status != "PENDING" {
+		return domain.Order{}, ErrOrderNotCancellable
+	}
+
+	items, err := s.repo.GetItemsForCancellation(ctx, tx, orderID)
+	if err != nil {
+		return domain.Order{}, err
+	}
+	if len(items) == 0 {
+		return domain.Order{}, ErrOrderNotCancellable
+	}
+
+	for _, item := range items {
+		onHandAfter, reservedAfter, err := s.repo.ReleaseReservedInventory(ctx, tx, item.ProductID, item.Quantity)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return domain.Order{}, ErrOrderInventoryConflict
+		}
+		if err != nil {
+			return domain.Order{}, err
+		}
+		if err := s.repo.RecordInventoryMovement(ctx, tx, domain.InventoryMovementInput{
+			ProductID: item.ProductID, MovementType: "ORDER_RELEASED",
+			OnHandDelta: 0, ReservedDelta: -item.Quantity,
+			OnHandAfter: onHandAfter, ReservedAfter: reservedAfter,
+			Reason:          "Reserved stock released after order cancellation",
+			CreatedByUserID: userID, ReferenceType: "ORDER", ReferenceID: orderID,
+		}); err != nil {
+			return domain.Order{}, err
+		}
+	}
+
+	if err := s.repo.MarkCancelled(ctx, tx, userID, orderID); err != nil {
+		return domain.Order{}, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return domain.Order{}, err
+	}
+
+	return s.repo.GetForUser(ctx, userID, orderID)
 }

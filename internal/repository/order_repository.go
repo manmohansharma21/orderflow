@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"errors"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -38,7 +39,7 @@ func (r *OrderRepository) GetActiveProduct(
 	return name, pricePaise, err
 }
 
-// ReserveInventory atomically reserves stock and returns the post-update quantities.
+// ReserveInventory atomically reserves stock and returns post-update quantities.
 func (r *OrderRepository) ReserveInventory(
 	ctx context.Context,
 	tx pgx.Tx,
@@ -119,5 +120,193 @@ func (r *OrderRepository) RecordInventoryMovement(
 	`, input.ProductID, input.MovementType, input.OnHandDelta,
 		input.ReservedDelta, input.OnHandAfter, input.ReservedAfter,
 		input.Reason, input.CreatedByUserID, input.ReferenceType, input.ReferenceID)
+	return err
+}
+
+// ListForUser returns a page of a user's orders and their items using one joined
+// result query (plus a count query), avoiding an N+1 query per order.
+func (r *OrderRepository) ListForUser(
+	ctx context.Context,
+	userID string,
+	limit int,
+	offset int64,
+) ([]domain.Order, int64, error) {
+	var total int64
+	if err := r.pool.QueryRow(ctx, `
+		SELECT COUNT(*) FROM orders WHERE user_id = $1
+	`, userID).Scan(&total); err != nil {
+		return nil, 0, err
+	}
+
+	rows, err := r.pool.Query(ctx, `
+		SELECT o.id::text, o.status, o.total_amount_paise, o.created_at, o.updated_at,
+		       COALESCE(oi.product_id::text, ''), COALESCE(oi.product_name, ''),
+		       COALESCE(oi.quantity, 0), COALESCE(oi.unit_price_paise, 0),
+		       COALESCE(oi.line_total_paise, 0)
+		FROM (
+			SELECT id, status, total_amount_paise, created_at, updated_at
+			FROM orders
+			WHERE user_id = $1
+			ORDER BY created_at DESC, id DESC
+			LIMIT $2 OFFSET $3
+		) AS o
+		LEFT JOIN order_items AS oi ON oi.order_id = o.id
+		ORDER BY o.created_at DESC, o.id DESC, oi.created_at, oi.id
+	`, userID, limit, offset)
+	if err != nil {
+		return nil, 0, err
+	}
+	orders, err := collectOrders(rows)
+	if err != nil {
+		return nil, 0, err
+	}
+	return orders, total, nil
+}
+
+// GetForUser hides orders belonging to other users by filtering by both IDs.
+func (r *OrderRepository) GetForUser(
+	ctx context.Context,
+	userID string,
+	orderID string,
+) (domain.Order, error) {
+	rows, err := r.pool.Query(ctx, `
+		SELECT o.id::text, o.status, o.total_amount_paise, o.created_at, o.updated_at,
+		       COALESCE(oi.product_id::text, ''), COALESCE(oi.product_name, ''),
+		       COALESCE(oi.quantity, 0), COALESCE(oi.unit_price_paise, 0),
+		       COALESCE(oi.line_total_paise, 0)
+		FROM orders AS o
+		LEFT JOIN order_items AS oi ON oi.order_id = o.id
+		WHERE o.id = $1 AND o.user_id = $2
+		ORDER BY oi.created_at, oi.id
+	`, orderID, userID)
+	if err != nil {
+		return domain.Order{}, err
+	}
+	orders, err := collectOrders(rows)
+	if err != nil {
+		return domain.Order{}, err
+	}
+	if len(orders) == 0 {
+		return domain.Order{}, pgx.ErrNoRows
+	}
+	return orders[0], nil
+}
+
+func collectOrders(rows pgx.Rows) ([]domain.Order, error) {
+	defer rows.Close()
+	orders := make([]domain.Order, 0)
+	lastID := ""
+
+	for rows.Next() {
+		var orderID, status, productID, productName string
+		var totalAmount, unitPrice, lineTotal int64
+		var createdAt, updatedAt time.Time
+		var quantity int
+		if err := rows.Scan(
+			&orderID, &status, &totalAmount, &createdAt, &updatedAt,
+			&productID, &productName, &quantity, &unitPrice, &lineTotal,
+		); err != nil {
+			return nil, err
+		}
+		if orderID != lastID {
+			orders = append(orders, domain.Order{
+				ID: orderID, Status: status, TotalAmountPaise: totalAmount,
+				CreatedAt: createdAt, UpdatedAt: updatedAt,
+				Items: make([]domain.OrderItem, 0),
+			})
+			lastID = orderID
+		}
+		if productID != "" {
+			orders[len(orders)-1].Items = append(orders[len(orders)-1].Items, domain.OrderItem{
+				ProductID: productID, ProductName: productName, Quantity: quantity,
+				UnitPricePaise: unitPrice, LineTotalPaise: lineTotal,
+			})
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return orders, nil
+}
+
+type orderItemForCancellation struct {
+	ProductID string
+	Quantity  int
+}
+
+func (r *OrderRepository) LockOrderForCancellation(
+	ctx context.Context,
+	tx pgx.Tx,
+	userID string,
+	orderID string,
+) (string, error) {
+	var status string
+	err := tx.QueryRow(ctx, `
+		SELECT status FROM orders
+		WHERE id = $1 AND user_id = $2
+		FOR UPDATE
+	`, orderID, userID).Scan(&status)
+	return status, err
+}
+
+func (r *OrderRepository) GetItemsForCancellation(
+	ctx context.Context,
+	tx pgx.Tx,
+	orderID string,
+) ([]orderItemForCancellation, error) {
+	rows, err := tx.Query(ctx, `
+		SELECT product_id::text, quantity
+		FROM order_items
+		WHERE order_id = $1
+		ORDER BY product_id
+		FOR UPDATE
+	`, orderID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	items := make([]orderItemForCancellation, 0)
+	for rows.Next() {
+		var item orderItemForCancellation
+		if err := rows.Scan(&item.ProductID, &item.Quantity); err != nil {
+			return nil, err
+		}
+		items = append(items, item)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+func (r *OrderRepository) ReleaseReservedInventory(
+	ctx context.Context,
+	tx pgx.Tx,
+	productID string,
+	quantity int,
+) (int, int, error) {
+	var onHand, reserved int
+	err := tx.QueryRow(ctx, `
+		UPDATE inventory
+		SET reserved_quantity = reserved_quantity - $2,
+		    updated_at = NOW()
+		WHERE product_id = $1 AND reserved_quantity >= $2
+		RETURNING on_hand_quantity, reserved_quantity
+	`, productID, quantity).Scan(&onHand, &reserved)
+	return onHand, reserved, err
+}
+
+func (r *OrderRepository) MarkCancelled(
+	ctx context.Context,
+	tx pgx.Tx,
+	userID string,
+	orderID string,
+) error {
+	_, err := tx.Exec(ctx, `
+		UPDATE orders
+		SET status = 'CANCELLED', updated_at = NOW()
+		WHERE id = $1 AND user_id = $2 AND status = 'PENDING'
+	`, orderID, userID)
 	return err
 }

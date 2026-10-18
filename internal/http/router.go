@@ -44,24 +44,23 @@ func NewRouter(pool databasePinger, readinessTimeoutSeconds int) *gin.Engine {
 		router.POST("/auth/login", auth.login)
 
 		router.GET("/profile", AuthRequired(), func(c *gin.Context) {
-			c.JSON(http.StatusOK, gin.H{
-				"user_id": c.GetString("user_id"),
-				"role":    c.GetString("user_role"),
-			})
+			c.JSON(http.StatusOK, gin.H{"user_id": c.GetString("user_id"), "role": c.GetString("user_role")})
 		})
-
 		router.POST("/admin/example", AuthRequired(), RequireRole("ADMIN"), func(c *gin.Context) {
 			c.JSON(http.StatusOK, gin.H{"status": "admin access granted"})
 		})
 
 		orderRepo := repository.NewOrderRepository(dbPool)
 		orderService := service.NewOrderService(orderRepo)
-		router.POST("/orders", AuthRequired(), newOrderHandler(orderService).createOrder)
+		orders := newOrderHandler(orderService)
+		router.POST("/orders", AuthRequired(), orders.createOrder)
+		router.GET("/orders", AuthRequired(), orders.listOrders)
+		router.GET("/orders/:id", AuthRequired(), orders.getOrder)
+		router.POST("/orders/:id/cancel", AuthRequired(), orders.cancelOrder)
 
 		productRepo := repository.NewProductRepository(dbPool)
 		productService := service.NewProductService(productRepo)
 		products := newProductHandler(productService)
-
 		router.GET("/products", products.list)
 		router.GET("/products/:id", products.getByID)
 		router.POST("/products", AuthRequired(), RequireRole("ADMIN"), products.create)
