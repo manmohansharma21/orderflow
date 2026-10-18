@@ -20,7 +20,12 @@ func paymentTestRouter() *gin.Engine {
 	gin.SetMode(gin.TestMode)
 	handler := newPaymentHandler(service.NewPaymentService(nil))
 	router := gin.New()
-	router.POST("/orders/:id/payments", handler.createForOrder)
+	// Supply an authenticated identity so tests of the Idempotency-Key header
+	// reach the intended service validation rather than failing on missing user ID.
+	router.POST("/orders/:id/payments", func(c *gin.Context) {
+		c.Set("user_id", "test-user-id")
+		c.Next()
+	}, handler.createForOrder)
 	router.POST("/payments/mock-callback", handler.mockCallback)
 	router.GET("/admin/payments/reconciliation", handler.reconciliation)
 	return router
@@ -121,13 +126,26 @@ func TestCreatePaymentRejectsInvalidOrderID(t *testing.T) {
 	}
 }
 
-func TestCreatePaymentRejectsMissingIdempotencyKeyBeforeRepository(t *testing.T) {
-	recorder := httptest.NewRecorder()
-	request := httptest.NewRequest(http.MethodPost, "/orders/8e840ec0-9315-4574-847f-15e8a17a578a/payments", nil)
-	paymentTestRouter().ServeHTTP(recorder, request)
-
-	if recorder.Code != http.StatusBadRequest {
-		t.Fatalf("expected %d, got %d: %s", http.StatusBadRequest, recorder.Code, recorder.Body.String())
+func TestCreatePaymentRejectsMissingOrShortIdempotencyKeyBeforeRepository(t *testing.T) {
+	tests := []struct {
+		name string
+		key  string
+	}{
+		{name: "missing key", key: ""},
+		{name: "short key", key: "short"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			recorder := httptest.NewRecorder()
+			request := httptest.NewRequest(http.MethodPost, "/orders/8e840ec0-9315-4574-847f-15e8a17a578a/payments", nil)
+			if tt.key != "" {
+				request.Header.Set("Idempotency-Key", tt.key)
+			}
+			paymentTestRouter().ServeHTTP(recorder, request)
+			if recorder.Code != http.StatusBadRequest {
+				t.Fatalf("expected %d, got %d: %s", http.StatusBadRequest, recorder.Code, recorder.Body.String())
+			}
+		})
 	}
 }
 
