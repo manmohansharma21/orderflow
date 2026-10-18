@@ -1,0 +1,14 @@
+flowchart LR
+    Client[Client / Postman] -->|JSON over HTTP| Gin[Gin Router]
+    Gin --> HTTP[HTTP handlers / request DTOs]
+    HTTP --> Auth[JWT and role middleware]
+    Auth --> Services[Application services]
+    HTTP --> Services
+    Services --> Domain[Domain types and business rules]
+    Services --> Repos[PostgreSQL repositories]
+    Repos --> PG[(PostgreSQL)]
+    Callback[Mock payment provider callback] --> HMAC[HMAC-SHA256 verifier]
+    HMAC --> PaySvc[Payment service]
+    PaySvc --> PayRepo[Payment repository]
+    PayRepo --> PG
+    PG --> Audit[Inventory movement audit]

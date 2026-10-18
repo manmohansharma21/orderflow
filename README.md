@@ -2,7 +2,7 @@
 
 **Author:** Manmohan Sharma  
 **Repository:** <https://github.com/manmohansharma21/orderflow>  
-**Latest repository HEAD reviewed:** `3df0139` — documentation and evidence update.  
+**Source of truth:** the public `main` branch. Always verify the GitHub Actions run for the exact commit being submitted.  
 **Latest CI result:** [GitHub Actions run 39165514715](https://github.com/manmohansharma21/orderflow/actions/runs/39165514715) — completed successfully. The last behavior-changing implementation commit is `1515cb0`; later commits complete benchmark fixes and documentation/evidence.
 
 OrderFlow is a Go/Gin REST backend demonstrating catalogue, inventory, transactional order placement, simulated payment processing, idempotency, recovery of missed simulated-provider callbacks, operational reports and request observability. PostgreSQL is the source of truth. Redis is an optional product-read cache and is **disabled by default** because the tested local workload was slower with the warm cache.
@@ -11,7 +11,7 @@ OrderFlow is a Go/Gin REST backend demonstrating catalogue, inventory, transacti
 
 ## Current verified state
 
-At the latest repository HEAD `3df0139`, the GitHub Actions run is green. That commit is a documentation/evidence update over the tested Go implementation. CI applies migrations to disposable PostgreSQL, starts Redis, runs unit and integration tests, race checks, `go vet`, whitespace checks, builds the Docker image and probes `/health` and `/ready`. The supplied local logs also show the reliability suite and Docker smoke test passed.
+The last reviewed baseline had a successful GitHub Actions run; verify the run for the exact commit being submitted. That commit is a documentation/evidence update over the tested Go implementation. CI applies migrations to disposable PostgreSQL, starts Redis, runs unit and integration tests, race checks, `go vet`, whitespace checks, builds the Docker image and probes `/health` and `/ready`. The supplied local logs also show the reliability suite and Docker smoke test passed.
 
 The successful CI workflow is tied to the exact commit above. If code changes after this point, verify the workflow for the new commit before calling that newer revision verified.
 
@@ -89,10 +89,6 @@ All diagrams above are pre-rendered PNGs to display reliably in GitHub. Their ed
 | `docs/diagrams/` | Editable HLD, LLD and order/payment state diagrams |
 
 Request DTOs currently live next to their relevant HTTP handlers; domain models live in `internal/domain`. A separate DTO package is optional, not a missing correctness requirement. See `docs/DESIGN_PATTERNS.md` and `docs/CI_CONFIGURATION_WALKTHROUGH.md` for learning notes.
-
-### Order/payment states
-
-![OrderFlow order and payment state transitions](docs/diagrams/ORDER_PAYMENT_STATE.png)
 
 ## Prerequisites
 
@@ -229,8 +225,7 @@ Do not run the order-flow benchmark and API benchmark as one long chained comman
 
 `Dockerfile` is a multi-stage build. The GitHub Actions workflow (`.github/workflows/ci.yml`) runs on pushes and pull requests to `main`, starts temporary PostgreSQL and Redis service containers, checks module tidiness, applies migrations, runs tests/race/vet, checks whitespace, builds the image and smoke-tests `/health` and `/ready` inside a container.
 
-- Latest reviewed HEAD: `3df0139`; last behavior-changing implementation: `1515cb0`
-- Successful run: <https://github.com/manmohansharma21/orderflow/actions/runs/39165514715>
+- The latest implementation and docs are on `main`. Check <https://github.com/manmohansharma21/orderflow/actions> for the run associated with the exact commit you intend to submit.
 
 **CI means Continuous Integration.** It is an automated quality gate that repeats validation consistently when code changes. Learn the job step-by-step in `docs/CI_CONFIGURATION_WALKTHROUGH.md`; the tracker intentionally keeps this walkthrough as a learning task.
 
@@ -251,17 +246,9 @@ On macOS, press **Command + Shift + 4**, drag to select the evidence region, and
 
 The final evidence session is described in `docs/SCREENSHOT_CHECKLIST.md` and `docs/evidence/README.md`; the same PNGs must be inserted into the corresponding figure placeholders in the Word report before exporting the submission PDF.
 
-## Scaler submission checklist
+## Release verification
 
-The portal screenshot shows three separate deliverables: (1) public GitHub URL, (2) project ZIP up to 50 MB, and (3) report PDF up to 50 MB. The Word report is the editable working copy; **the report field expects PDF**.
-
-1. Commit/push the final code, README, diagrams, screenshot evidence and actual benchmark output.
-2. Wait for the Actions run for that exact HEAD SHA to be green.
-3. Download the full archive from the current `main` branch: <https://github.com/manmohansharma21/orderflow/archive/refs/heads/main.zip>. This is the complete source archive—not one of the incremental patch ZIPs used during development.
-4. Review the archive and ensure `.env`, secrets, database dumps and generated report drafts are absent.
-5. Complete and personally review the Word report: registered email, actual project module start/end dates, actual submission date, references, screenshot figures and institutional AI-use disclosure. Sign your own declaration only if accurate; do not sign the supervisor certification.
-6. Export that final Word document to PDF and visually check all pages. Upload the PDF separately in the portal's **Upload Project Report** field.
-7. Read both portal declarations and check them yourself only if they are true.
+Before producing a release archive, run `go test ./...`, `go test -race ./internal/integration/...`, `go vet ./...`, and `git diff --check`; verify the GitHub Actions run for the exact commit. Keep generated evidence and editable diagrams in the repository, and never commit `.env`, credentials or database backups. Personal portal-upload steps are maintained separately in `docs/FINAL_SUBMISSION_STATUS.md`.
 
 ## Scope boundaries and limitations
 
@@ -276,3 +263,8 @@ The portal screenshot shows three separate deliverables: (1) public GitHub URL, 
 Genuine local evidence already committed under `docs/evidence/` includes a combined HTTP 200 health/readiness terminal capture, the `/metrics` exposition, and an initial development log showing `POST /orders` returning 201. The early migration-only capture and readiness-only duplicate are kept in `initial-captures/` and are not evidence of the final schema. A screenshot that exposed a local `DATABASE_URL` password was deliberately excluded.
 
 The final Postman screenshots still need to be taken from actual passing requests: auth/401/403, product admin/409, inventory audit, multi-product order/idempotency/cancellation, payment callback and missed-callback recovery/reports. Also capture a green Actions run for the final evidence commit and a fresh Docker smoke test. Follow `docs/evidence/README.md` and `docs/evidence/POSTMAN_SCREENSHOT_RUNBOOK.md`; do not include tokens, passwords or webhook signatures.
+
+
+## Additional benchmark evidence
+
+The run captured at `docs/evidence/performance/benchmark-results-20261018T230232Z.png` showed 300/300 successful requests in both variants. This run favored warm Redis (P50 2.429 ms vs 2.829 ms; P95 4.140 ms vs 5.203 ms), while an earlier run showed the opposite. Treat results as variable local measurements, not a guaranteed cache speedup. See `docs/evidence/performance/README.md`.

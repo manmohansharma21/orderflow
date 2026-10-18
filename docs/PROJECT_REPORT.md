@@ -4,8 +4,8 @@
 **Programme:** Master of Science in Computer Science, Scaler Neovarsity - Woolf
 **Supervisor shown in template:** Naman Bhalla
 **Repository:** https://github.com/manmohansharma21/orderflow
-**Last verified code baseline:** `3df0139`
-**GitHub Actions:** https://github.com/manmohansharma21/orderflow/actions/runs/39163364836 (success)
+**Source of truth:** public `main`; verify CI for the exact submitted HEAD
+**GitHub Actions:** https://github.com/manmohansharma21/orderflow/actions (verify exact submitted HEAD)
 **Evidence/doc revision:** pending a new green CI run after the diagram and screenshot patch is pushed.
 
 This Markdown file is the technical content source for the separate Word report. Use the supplied Word review draft as the submission layout; it follows the official report template structure, includes HLD/LLD/state diagrams and screenshot placeholders, and must be completed and exported to PDF after the final evidence session. Do not submit this Markdown file instead of the PDF required by the portal.
@@ -65,23 +65,26 @@ Secrets are local environment configuration and must not be committed. Admin-onl
 
 ## Test and deployment evidence
 
-Code baseline `3df0139` has a successful [GitHub Actions run](https://github.com/manmohansharma21/orderflow/actions/runs/39163364836), including disposable PostgreSQL/Redis, migrations 000001–000008, unit/integration tests, race checks, vet, whitespace checks, Docker image build and `/health`/`/ready` smoke probes. Any further patch needs its own green run. Local terminal evidence also confirms `scripts/verify-residual-milestone.sh` passed and `scripts/docker-smoke-test.sh` returned the expected status bodies.
+The reviewed implementation baseline passed [GitHub Actions](https://github.com/manmohansharma21/orderflow/actions); verify the exact final HEAD before submission, including disposable PostgreSQL/Redis, migrations 000001–000008, unit/integration tests, race checks, vet, whitespace checks, Docker image build and `/health`/`/ready` smoke probes. Any further patch needs its own green run. Local terminal evidence also confirms `scripts/verify-residual-milestone.sh` passed and `scripts/docker-smoke-test.sh` returned the expected status bodies.
 
 Do not use fabricated screenshots: see `docs/evidence/README.md`. The final screenshot session should cover Postman auth/catalogue (including 401 and 403), inventory, multi-product order/idempotency/cancellation, payment success/failure/recovery, admin reports, Docker health/readiness, the green Actions run, request metrics and benchmark results. The first health/readiness, metrics and initial order-log captures are recorded in `docs/evidence/README.md`.
 
 ## Performance results
 
-The measured local `GET /products?page=1&limit=20` API run used 300 requests per variant and 10 concurrent workers on an Apple M2 (macOS arm64), Go 1.27.2 and Docker Desktop 29.8.2.
+Two actual local HTTP benchmark runs were captured for `GET /products?page=1&limit=20`, each with 300 requests per variant and 10 concurrent workers on an Apple M2 (macOS arm64), Go 1.27.2 and Docker Desktop 29.8.2. Both runs reported 300 successful responses and zero errors in each variant.
 
-| Metric | Redis disabled | Warm Redis cache |
-|---|---:|---:|
-| Success | 300/300 | 300/300 |
-| P50 | 2.480 ms | 4.447 ms |
-| P95 | 4.270 ms | 13.966 ms |
-| Mean | 3.315 ms | 5.702 ms |
-| Throughput | 2,821.81 req/s | 1,697.92 req/s |
+| Run | Variant | P50 | P95 | Mean | Throughput |
+|---|---|---:|---:|---:|---:|
+| 2026-10-18 19:13:09 UTC | Redis disabled | 2.480 ms | 4.270 ms | 3.315 ms | 2,821.81 req/s |
+| 2026-10-18 19:13:09 UTC | Redis warm | 4.447 ms | 13.966 ms | 5.702 ms | 1,697.92 req/s |
+| 2026-10-18 23:02:32 UTC | Redis disabled | 2.829 ms | 5.203 ms | 3.748 ms | 2,190.99 req/s |
+| 2026-10-18 23:02:32 UTC | Redis warm | 2.429 ms | 4.140 ms | 2.937 ms | 3,297.18 req/s |
 
-This local test showed Redis slower than direct PostgreSQL reads for the current small dataset. The results are environment/load-specific and do not prove Redis is universally slower; they do mean the report must not claim a speedup. The bounded service/repository benchmark completed at baseline `3df0139`: order creation `1,848,705 ns/op`, `5,892 B/op`, `112 allocs/op`; order history `551,748 ns/op`, `19,837 B/op`, `312 allocs/op`. These one-sample Apple M2 measurements are not HTTP latency percentiles.
+**Interpretation:** the first run favored PostgreSQL without cache; the second favored warm Redis. This inconsistency means the available data does not support a stable general claim that caching improves performance. Results depend on dataset, cache warmth and local runtime noise. Redis remains optional and disabled by default in the project configuration. A stronger conclusion would require repeat runs, a representative dataset, warm-up/control, and reporting distribution/variance.
+
+![Screenshot of the second completed API cache benchmark](evidence/performance/benchmark-results-20261018T230232Z.png)
+
+The separate bounded service/repository benchmark completed at the previously reviewed baseline: order creation 1,848,705 ns/op, 5,892 B/op, 112 allocs/op; order history 551,748 ns/op, 19,837 B/op, 312 allocs/op. These one-sample Apple M2 service-path measurements are not HTTP latency percentiles. The corresponding actual output is stored in `docs/evidence/performance/order-flow-benchmarks-20261018T202650Z.txt`.
 
 ## Scope limitations and next steps
 
@@ -94,4 +97,4 @@ Finish by running the final Postman collection, capturing genuine evidence, inse
 
 README and report figures link to pre-rendered PNGs in `docs/diagrams/` so the architecture is visible in browsers that do not support Mermaid rendering consistently. Editable DOT sources are retained, along with Mermaid sources for HLD/LLD/state transitions. The screenshots supplied so far evidence local `/health` and `/ready` HTTP 200, `/metrics` counters/histogram, and an earlier `POST /orders` HTTP 201. These do not yet replace the final Postman status-code evidence listed in `docs/evidence/POSTMAN_SCREENSHOT_RUNBOOK.md`. The first migration-only screenshot is archived as historical only; one screenshot that exposed a local database password was excluded from the repository patch.
 
-Latest reviewed remote HEAD is `3df0139`, whose GitHub Actions run succeeded: https://github.com/manmohansharma21/orderflow/actions/runs/39165514715. The Word report/PDF cannot be considered submission-ready until the candidate fills the real module start/end dates and actual submission date, signs the declaration, has the supervisor complete certification, and captures the remaining Postman/CI/Docker evidence.
+Latest reviewed remote HEAD is the previously reviewed baseline, whose GitHub Actions run succeeded: https://github.com/manmohansharma21/orderflow/actions/runs/39165514715. The Word report/PDF cannot be considered submission-ready until the candidate fills the real module start/end dates and actual submission date, signs the declaration, has the supervisor complete certification, and captures the remaining Postman/CI/Docker evidence.

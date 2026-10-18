@@ -1,0 +1,24 @@
+sequenceDiagram
+    autonumber
+    participant C as Client
+    participant H as Order HTTP handler
+    participant S as Order service
+    participant R as Order repository
+    participant DB as PostgreSQL
+    C->>H: POST /orders (product_id, quantity)
+    H->>H: Validate JSON and JWT
+    H->>S: CreateOrder(user, product, quantity)
+    S->>R: BeginTx + load active product
+    S->>R: Atomic UPDATE inventory WHERE available >= quantity
+    alt no stock / product missing / subsequent write fails
+        R-->>S: error / no row
+        S->>DB: Rollback deferred transaction
+        S-->>H: domain error
+        H-->>C: 404 or 409 / 400 JSON
+    else stock reserved
+        S->>R: INSERT order and order item
+        S->>R: INSERT ORDER_RESERVED audit movement
+        S->>DB: Commit transaction
+        S-->>H: order ID + PENDING + total paise
+        H-->>C: 201 JSON
+    end
