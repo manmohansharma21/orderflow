@@ -1,0 +1,1948 @@
+{
+  "info": {
+    "_postman_id": "a8770ef9-669c-4ce8-91d6-6e49c9e3b287",
+    "name": "OrderFlow — Guided Local API Evidence Run",
+    "description": "A guided, manual-order Postman collection for the OrderFlow Go/Gin modular monolith. Import it, set the local mock callback secret only in Postman Current Value, and run each request in sequence. It expects an existing local ADMIN user (defaults to the previously used local test admin). Do not use against production. Do not export or share populated secrets/tokens. Screenshots guidance is in docs/postman/ORDERFLOW_POSTMAN_ATOMIC_STEPS.md.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8080",
+      "type": "string"
+    },
+    {
+      "key": "customerEmail",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "customerPassword",
+      "value": "OrderFlowPostmanDemo2026",
+      "type": "string"
+    },
+    {
+      "key": "customerToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "adminEmail",
+      "value": "of.admin.test.20261018@example.com",
+      "type": "string"
+    },
+    {
+      "key": "adminPassword",
+      "value": "OrderFlowLocalTest2026",
+      "type": "string"
+    },
+    {
+      "key": "adminToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "productId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "productId2",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "productId3",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "sku",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "sku2",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "sku3",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "orderIdempotencyKey",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "orderId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "paymentOrderIdempotencyKey",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "paymentOrderId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "paymentIdempotencyKey",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "paymentId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "paymentAmountPaise",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "paymentCurrency",
+      "value": "INR",
+      "type": "string"
+    },
+    {
+      "key": "failureOrderIdempotencyKey",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "failureOrderId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "failurePaymentIdempotencyKey",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "failurePaymentId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "failurePaymentAmountPaise",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "failurePaymentCurrency",
+      "value": "INR",
+      "type": "string"
+    },
+    {
+      "key": "recoveryOrderIdempotencyKey",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "recoveryOrderId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "recoveryPaymentIdempotencyKey",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "recoveryPaymentId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "recoveryPaymentAmountPaise",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "recoveryPaymentCurrency",
+      "value": "INR",
+      "type": "string"
+    },
+    {
+      "key": "mockPaymentWebhookSecret",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "eventSuffix",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "00 — Health and observability",
+      "item": [
+        {
+          "name": "01 — Health (expect 200)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/health",
+            "description": "Public liveness check."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('health returns 200', () => pm.response.to.have.status(200));",
+                  "pm.test('status is ok', () => pm.expect(pm.response.json().status).to.eql('ok'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "02 — Readiness (expect 200)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/ready",
+            "description": "Checks PostgreSQL connectivity."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('readiness returns 200', () => pm.response.to.have.status(200));",
+                  "pm.test('status is ready', () => pm.expect(pm.response.json().status).to.eql('ready'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "03 — HTTP metrics (expect 200)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/metrics",
+            "description": "Prometheus-text counters and histogram; this request itself increments the metrics."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('metrics returns 200', () => pm.response.to.have.status(200));",
+                  "pm.test('HTTP counter exists', () => pm.expect(pm.response.text()).to.include('orderflow_http_requests_total'));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "01 — Authentication and RBAC",
+      "item": [
+        {
+          "name": "01 — Register a fresh CUSTOMER (expect 201)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/auth/register",
+            "description": "Pre-request creates a unique local demo email each time. Keep this local-only.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"email\":\"{{customerEmail}}\",\"password\":\"{{customerPassword}}\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set('customerEmail', 'of.pm.' + Date.now() + '@example.com');"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('customer registered', () => pm.response.to.have.status(201));",
+                  "pm.test('role is CUSTOMER', () => pm.expect(pm.response.json().role).to.eql('CUSTOMER'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "02 — Login CUSTOMER (expect 200; saves token)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/auth/login",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"email\":\"{{customerEmail}}\",\"password\":\"{{customerPassword}}\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('customer login succeeds', () => pm.response.to.have.status(200));",
+                  "pm.collectionVariables.set('customerToken', pm.response.json().access_token);",
+                  "pm.test('access token captured', () => pm.expect(pm.collectionVariables.get('customerToken')).to.be.a('string').and.not.empty);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "03 — Profile WITHOUT token (expect 401)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/profile",
+            "description": "Intentional authorization-negative evidence.",
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('profile without token returns 401', () => pm.response.to.have.status(401));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "04 — Profile with CUSTOMER token (expect 200)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{customerToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/profile",
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('profile returns 200', () => pm.response.to.have.status(200));",
+                  "pm.test('role is CUSTOMER', () => pm.expect(pm.response.json().role).to.eql('CUSTOMER'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "05 — Login existing ADMIN (expect 200; saves token)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/auth/login",
+            "description": "Uses the already-created local ADMIN user. Edit adminEmail/adminPassword in collection Current Value if your local account differs.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"email\":\"{{adminEmail}}\",\"password\":\"{{adminPassword}}\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('admin login succeeds', () => pm.response.to.have.status(200));",
+                  "pm.test('account has ADMIN role', () => pm.expect(pm.response.json().user.role).to.eql('ADMIN'));",
+                  "pm.collectionVariables.set('adminToken', pm.response.json().access_token);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "06 — Admin route with CUSTOMER token (expect 403)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{customerToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/admin/example",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('customer denied admin route', () => pm.response.to.have.status(403));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "07 — Admin route with ADMIN token (expect 200)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/admin/example",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('admin route allowed', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "02 — Product catalog/admin",
+      "item": [
+        {
+          "name": "01 — List products (expect 200)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/products?page=1&limit=20",
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('product list returns 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "02 — Create product A for order tests (expect 201)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/products",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"sku\":\"{{sku}}\",\"name\":\"OrderFlow Postman Product A\",\"description\":\"Temporary local evidence product A\",\"price_paise\":49900,\"initial_stock\":50}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set('sku', 'OF-A-' + pm.variables.replaceIn('{{$guid}}'));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('product A created', () => pm.response.to.have.status(201));",
+                  "const j = pm.response.json();",
+                  "pm.collectionVariables.set('productId', j.id);",
+                  "pm.test('product ID captured', () => pm.expect(pm.collectionVariables.get('productId')).to.be.a('string').and.not.empty);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "03 — Create product B for multi-product order (expect 201)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/products",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"sku\":\"{{sku2}}\",\"name\":\"OrderFlow Postman Product B\",\"description\":\"Temporary local evidence product B\",\"price_paise\":12500,\"initial_stock\":50}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set('sku2', 'OF-B-' + pm.variables.replaceIn('{{$guid}}'));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('product B created', () => pm.response.to.have.status(201));",
+                  "pm.collectionVariables.set('productId2', pm.response.json().id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "04 — Duplicate SKU (expect 409)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/products",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"sku\":\"{{sku}}\",\"name\":\"Duplicate SKU should fail\",\"description\":\"negative test\",\"price_paise\":100,\"initial_stock\":0}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('duplicate SKU returns 409', () => pm.response.to.have.status(409));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "05 — Search/paginate products (expect 200)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/products?search=OrderFlow&page=1&limit=10",
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('search and pagination return 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "06 — Product details (expect 200)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/products/{{productId}}",
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('product detail returns 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "07 — Update Product A (expect 200)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/products/{{productId}}",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"name\":\"OrderFlow Postman Product A Updated\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('product update returns 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "03 — Inventory and audit",
+      "item": [
+        {
+          "name": "01 — Availability (expect 200)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/inventory/{{productId}}",
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('availability returns 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "02 — Receive 5 units (expect 200)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/admin/inventory/receipts",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"product_id\":\"{{productId}}\",\"quantity\":5,\"reason\":\"Postman evidence stock receipt\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('stock receipt returns 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "03 — Adjust stock by +2 (expect 200)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/admin/inventory/adjustments",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"product_id\":\"{{productId}}\",\"quantity_delta\":2,\"reason\":\"Postman evidence adjustment\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('stock adjustment returns 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "04 — Inventory movements audit (expect 200)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/admin/inventory/movements?product_id={{productId}}&page=1&limit=20",
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('inventory movements returns 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "04 — Multi-product orders and idempotency",
+      "item": [
+        {
+          "name": "01 — Create order WITHOUT token (expect 401)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Idempotency-Key",
+                "value": "of-noauth-order-0001"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/orders",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"items\":[{\"product_id\":\"{{productId}}\",\"quantity\":1}]}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('unauthenticated order returns 401', () => pm.response.to.have.status(401));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "02 — Create MULTI-PRODUCT order (expect 201; saves orderId)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{customerToken}}"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{orderIdempotencyKey}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/orders",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"items\":[{\"product_id\":\"{{productId}}\",\"quantity\":1},{\"product_id\":\"{{productId2}}\",\"quantity\":2}]}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set('orderIdempotencyKey', 'of-order-' + pm.variables.replaceIn('{{$guid}}'));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('multi-product order created', () => pm.response.to.have.status(201));",
+                  "pm.collectionVariables.set('orderId', pm.response.json().order_id);",
+                  "pm.test('order ID captured', () => pm.expect(pm.collectionVariables.get('orderId')).to.be.a('string').and.not.empty);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "03 — Retry identical order and key (expect 200)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{customerToken}}"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{orderIdempotencyKey}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/orders",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"items\":[{\"product_id\":\"{{productId}}\",\"quantity\":1},{\"product_id\":\"{{productId2}}\",\"quantity\":2}]}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('same idempotency request replays with 200', () => pm.response.to.have.status(200));",
+                  "pm.test('same order ID returned', () => pm.expect(pm.response.json().order_id).to.eql(pm.collectionVariables.get('orderId')));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "04 — Reuse order key with different payload (expect 409)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{customerToken}}"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{orderIdempotencyKey}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/orders",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"items\":[{\"product_id\":\"{{productId}}\",\"quantity\":3},{\"product_id\":\"{{productId2}}\",\"quantity\":2}]}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('different payload with same key returns 409', () => pm.response.to.have.status(409));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "05 — Order history (expect 200)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{customerToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/orders?page=1&limit=20",
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('order history returns 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "06 — Order details (expect 200)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{customerToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/orders/{{orderId}}",
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('order details returns 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "07 — Cancel order (expect 200)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{customerToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/orders/{{orderId}}/cancel",
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('first cancellation returns 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "08 — Repeat cancellation (expect 409)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{customerToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/orders/{{orderId}}/cancel",
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('repeat cancellation is rejected', () => pm.response.to.have.status(409));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "05 — Payment success and failure",
+      "item": [
+        {
+          "name": "01 — Create a fresh order for SUCCESS payment (expect 201)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{customerToken}}"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{paymentOrderIdempotencyKey}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/orders",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"items\":[{\"product_id\":\"{{productId}}\",\"quantity\":1}]}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set('paymentOrderIdempotencyKey', 'of-payorder-' + pm.variables.replaceIn('{{$guid}}'));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('payment order created', () => pm.response.to.have.status(201));",
+                  "pm.collectionVariables.set('paymentOrderId', pm.response.json().order_id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "02 — Initiate payment (expect 201; saves payment metadata)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{customerToken}}"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{paymentIdempotencyKey}}"
+              }
+            ],
+            "url": "{{baseUrl}}/orders/{{paymentOrderId}}/payments",
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set('paymentIdempotencyKey', 'of-payment-' + pm.variables.replaceIn('{{$guid}}'));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('payment initiated', () => pm.response.to.have.status(201));",
+                  "const j = pm.response.json();",
+                  "pm.collectionVariables.set('paymentId', j.id);",
+                  "pm.collectionVariables.set('paymentAmountPaise', String(j.amount_paise));",
+                  "pm.collectionVariables.set('paymentCurrency', j.currency || 'INR');"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "03 — Invalid callback signature (expect 401)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Mock-Signature",
+                "value": "sha256=deadbeef"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/payments/mock-callback",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"payment_id\":\"{{paymentId}}\",\"outcome\":\"SUCCESS\",\"event_id\":\"evt-invalid-signature\",\"amount_paise\":{{paymentAmountPaise}},\"currency\":\"{{paymentCurrency}}\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('invalid signature rejected', () => pm.response.to.have.status(401));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "04 — Signed SUCCESS callback (expect 200)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/payments/mock-callback",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"payment_id\":\"{{paymentId}}\",\"outcome\":\"SUCCESS\",\"event_id\":\"evt-{{eventSuffix}}\",\"amount_paise\":{{paymentAmountPaise}},\"currency\":\"{{paymentCurrency}}\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const secret = pm.collectionVariables.get('mockPaymentWebhookSecret') || '';",
+                  "if (secret.length < 32) { throw new Error('Set Current Value of mockPaymentWebhookSecret from local .env; never share/export it.'); }",
+                  "pm.collectionVariables.set('eventSuffix', pm.variables.replaceIn('{{$guid}}'));",
+                  "const raw = pm.variables.replaceIn(pm.request.body.raw || '');",
+                  "const digest = CryptoJS.HmacSHA256(raw, secret).toString(CryptoJS.enc.Hex);",
+                  "pm.request.headers.upsert({key: 'X-Mock-Signature', value: 'sha256=' + digest});"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('signed success callback accepted', () => pm.response.to.have.status(200));",
+                  "pm.test('payment reached SUCCESS', () => pm.expect(pm.response.json().status).to.eql('SUCCESS'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "05 — Verify successful order is CONFIRMED (expect 200)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{customerToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/orders/{{paymentOrderId}}",
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('confirmed order details return 200', () => pm.response.to.have.status(200));",
+                  "pm.test('order is CONFIRMED', () => pm.expect(pm.response.json().status).to.eql('CONFIRMED'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "06 — Create fresh order for FAILED payment (expect 201)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{customerToken}}"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{failureOrderIdempotencyKey}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/orders",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"items\":[{\"product_id\":\"{{productId}}\",\"quantity\":1}]}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set('failureOrderIdempotencyKey', 'of-failorder-' + pm.variables.replaceIn('{{$guid}}'));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('failure-path order created', () => pm.response.to.have.status(201));",
+                  "pm.collectionVariables.set('failureOrderId', pm.response.json().order_id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "07 — Initiate FAILED-path payment (expect 201)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{customerToken}}"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{failurePaymentIdempotencyKey}}"
+              }
+            ],
+            "url": "{{baseUrl}}/orders/{{failureOrderId}}/payments",
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set('failurePaymentIdempotencyKey', 'of-failpay-' + pm.variables.replaceIn('{{$guid}}'));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('failed-path payment initiated', () => pm.response.to.have.status(201));",
+                  "const j = pm.response.json();",
+                  "pm.collectionVariables.set('failurePaymentId', j.id);",
+                  "pm.collectionVariables.set('failurePaymentAmountPaise', String(j.amount_paise));",
+                  "pm.collectionVariables.set('failurePaymentCurrency', j.currency || 'INR');"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "08 — Signed FAILED callback (expect 200)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/payments/mock-callback",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"payment_id\":\"{{failurePaymentId}}\",\"outcome\":\"FAILED\",\"event_id\":\"evt-{{eventSuffix}}\",\"amount_paise\":{{failurePaymentAmountPaise}},\"currency\":\"{{failurePaymentCurrency}}\",\"failure_reason\":\"provider_declined_demo\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const secret = pm.collectionVariables.get('mockPaymentWebhookSecret') || '';",
+                  "if (secret.length < 32) { throw new Error('Set Current Value of mockPaymentWebhookSecret from local .env; never share/export it.'); }",
+                  "pm.collectionVariables.set('eventSuffix', pm.variables.replaceIn('{{$guid}}'));",
+                  "const raw = pm.variables.replaceIn(pm.request.body.raw || '');",
+                  "const digest = CryptoJS.HmacSHA256(raw, secret).toString(CryptoJS.enc.Hex);",
+                  "pm.request.headers.upsert({key: 'X-Mock-Signature', value: 'sha256=' + digest});"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('signed failed callback accepted', () => pm.response.to.have.status(200));",
+                  "pm.test('payment reached FAILED', () => pm.expect(pm.response.json().status).to.eql('FAILED'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "09 — ADMIN payment reconciliation report (expect 200)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/admin/payments/reconciliation?older_than_minutes=15",
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('reconciliation report returns 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "06 — Missed callback recovery (run after payments)",
+      "description": "Shows the mock provider ledger and recovery flow without sending a webhook callback. Ensure APP_ENV is not production.",
+      "item": [
+        {
+          "name": "01 — Create recovery order (expect 201)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{customerToken}}"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{recoveryOrderIdempotencyKey}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/orders",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"items\":[{\"product_id\":\"{{productId}}\",\"quantity\":1}]}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set('recoveryOrderIdempotencyKey', 'of-recovery-order-' + pm.variables.replaceIn('{{$guid}}'));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('recovery order created', () => pm.response.to.have.status(201));",
+                  "pm.collectionVariables.set('recoveryOrderId', pm.response.json().order_id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "02 — Initiate recovery payment (expect 201)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{customerToken}}"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{recoveryPaymentIdempotencyKey}}"
+              }
+            ],
+            "url": "{{baseUrl}}/orders/{{recoveryOrderId}}/payments",
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set('recoveryPaymentIdempotencyKey', 'of-recovery-pay-' + pm.variables.replaceIn('{{$guid}}'));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('recovery payment initiated', () => pm.response.to.have.status(201));",
+                  "const j = pm.response.json();",
+                  "pm.collectionVariables.set('recoveryPaymentId', j.id);",
+                  "pm.collectionVariables.set('recoveryPaymentAmountPaise', String(j.amount_paise));",
+                  "pm.collectionVariables.set('recoveryPaymentCurrency', j.currency || 'INR');"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "03 — Set mock-provider SUCCESS without callback (expect 200)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/admin/mock-provider/payments/{{recoveryPaymentId}}/outcome",
+            "description": "Development-only ADMIN simulation endpoint. Do not expose in production.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"outcome\":\"SUCCESS\",\"amount_paise\":{{recoveryPaymentAmountPaise}},\"currency\":\"{{recoveryPaymentCurrency}}\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('mock provider outcome saved', () => pm.response.to.have.status(200));",
+                  "pm.test('provider outcome is SUCCESS', () => pm.expect(pm.response.json().outcome).to.eql('SUCCESS'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "04 — Run reconciliation immediately (expect 200)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/admin/payments/reconciliation/run?older_than_minutes=0&limit=100",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('reconciliation run returns 200', () => pm.response.to.have.status(200));",
+                  "pm.test('at least one outcome recovered', () => pm.expect(pm.response.json().recovered_count).to.be.at.least(1));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "05 — Verify recovered order is CONFIRMED (expect 200)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{customerToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/orders/{{recoveryOrderId}}",
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('recovered order returns 200', () => pm.response.to.have.status(200));",
+                  "pm.test('missed callback recovered order', () => pm.expect(pm.response.json().status).to.eql('CONFIRMED'));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "07 — Reports and deactivation",
+      "item": [
+        {
+          "name": "01 — Admin orders report (expect 200)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/admin/reports/orders",
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('orders report returns 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "02 — Admin sales report (expect 200)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/admin/reports/sales",
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('sales report returns 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "03 — Admin inventory report (expect 200)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/admin/reports/inventory?low_stock_threshold=5",
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('inventory report returns 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "04 — Create disposable product C (expect 201)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/products",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"sku\":\"{{sku3}}\",\"name\":\"OrderFlow Disposable Deactivation Product\",\"description\":\"Used only for deactivation status evidence\",\"price_paise\":100,\"initial_stock\":1}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set('sku3', 'OF-C-' + pm.variables.replaceIn('{{$guid}}'));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('disposable product created', () => pm.response.to.have.status(201));",
+                  "pm.collectionVariables.set('productId3', pm.response.json().id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "05 — Deactivate disposable product (expect 200)",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/products/{{productId3}}",
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('product deactivated', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "06 — Fetch deactivated product (expect 404)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/products/{{productId3}}",
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('inactive product is not returned', () => pm.response.to.have.status(404));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
