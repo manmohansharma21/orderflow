@@ -32,23 +32,17 @@ func NewRouter(pool databasePinger, readinessTimeoutSeconds int) *gin.Engine {
 		defer cancel()
 
 		if err := pool.Ping(ctx); err != nil {
-			c.JSON(http.StatusServiceUnavailable, gin.H{
-				"status": "not_ready",
-			})
+			c.JSON(http.StatusServiceUnavailable, gin.H{"status": "not_ready"})
 			return
 		}
-
 		c.JSON(http.StatusOK, gin.H{"status": "ready"})
 	})
 
 	if dbPool, ok := pool.(*pgxpool.Pool); ok {
-		// Authentication routes
 		auth := newAuthHandler(dbPool)
-
 		router.POST("/auth/register", auth.register)
 		router.POST("/auth/login", auth.login)
 
-		// Protected profile route
 		router.GET("/profile", AuthRequired(), func(c *gin.Context) {
 			c.JSON(http.StatusOK, gin.H{
 				"user_id": c.GetString("user_id"),
@@ -56,30 +50,23 @@ func NewRouter(pool databasePinger, readinessTimeoutSeconds int) *gin.Engine {
 			})
 		})
 
-		// Admin-only example route
-		router.POST(
-			"/admin/example",
-			AuthRequired(),
-			RequireRole("ADMIN"),
-			func(c *gin.Context) {
-				c.JSON(http.StatusOK, gin.H{
-					"status": "admin access granted",
-				})
-			},
-		)
+		router.POST("/admin/example", AuthRequired(), RequireRole("ADMIN"), func(c *gin.Context) {
+			c.JSON(http.StatusOK, gin.H{"status": "admin access granted"})
+		})
 
-		// Orders
 		orderRepo := repository.NewOrderRepository(dbPool)
 		orderService := service.NewOrderService(orderRepo)
 		router.POST("/orders", AuthRequired(), newOrderHandler(orderService).createOrder)
 
-		// Products
 		productRepo := repository.NewProductRepository(dbPool)
 		productService := service.NewProductService(productRepo)
 		products := newProductHandler(productService)
 
 		router.GET("/products", products.list)
 		router.GET("/products/:id", products.getByID)
+		router.POST("/products", AuthRequired(), RequireRole("ADMIN"), products.create)
+		router.PATCH("/products/:id", AuthRequired(), RequireRole("ADMIN"), products.update)
+		router.DELETE("/products/:id", AuthRequired(), RequireRole("ADMIN"), products.deactivate)
 	}
 
 	return router

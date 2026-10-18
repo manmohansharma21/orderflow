@@ -15,3 +15,19 @@ type ProductList struct {
 	Limit int       `json:"limit"`
 	Total int64     `json:"total"`
 }
+
+type CreateProductInput struct {
+	SKU          string
+	Name         string
+	Description  *string
+	PricePaise   int64
+	InitialStock int
+}
+
+type UpdateProductInput struct {
+	SKU         *string
+	Name        *string
+	Description *string
+	PricePaise  *int64
+	IsActive    *bool
+}
