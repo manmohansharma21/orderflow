@@ -1,9 +1,9 @@
 # OrderFlow — E-commerce Order and Payment Management API
 
-**Author:** Manmohan Sharma
-**Repository:** <https://github.com/manmohansharma21/orderflow>
-**Verified implementation commit:** `1515cb0` — `feat: complete provider recovery and HTTP observability`
-**CI result for that commit:** [GitHub Actions run 39160539244](https://github.com/manmohansharma21/orderflow/actions/runs/39160539244) — completed successfully.
+**Author:** Manmohan Sharma  
+**Repository:** <https://github.com/manmohansharma21/orderflow>  
+**Latest repository HEAD reviewed:** `3df0139` — documentation and evidence update.  
+**Latest CI result:** [GitHub Actions run 39165514715](https://github.com/manmohansharma21/orderflow/actions/runs/39165514715) — completed successfully. The last behavior-changing implementation commit is `1515cb0`; later commits complete benchmark fixes and documentation/evidence.
 
 OrderFlow is a Go/Gin REST backend demonstrating catalogue, inventory, transactional order placement, simulated payment processing, idempotency, recovery of missed simulated-provider callbacks, operational reports and request observability. PostgreSQL is the source of truth. Redis is an optional product-read cache and is **disabled by default** because the tested local workload was slower with the warm cache.
 
@@ -11,7 +11,7 @@ OrderFlow is a Go/Gin REST backend demonstrating catalogue, inventory, transacti
 
 ## Current verified state
 
-At commit `1515cb0`, the submitted source has a green CI run. The workflow applies migrations to disposable PostgreSQL and starts disposable Redis, runs tests and race checks, runs `go vet`, builds the Docker image and checks `/health` and `/ready`. On the developer Mac, the supplied terminal output also shows the reliability suite passed and the Docker smoke test returned `{"status":"ok"}` from `/health` and `{"status":"ready"}` from `/ready`.
+At the latest repository HEAD `3df0139`, the GitHub Actions run is green. That commit is a documentation/evidence update over the tested Go implementation. CI applies migrations to disposable PostgreSQL, starts Redis, runs unit and integration tests, race checks, `go vet`, whitespace checks, builds the Docker image and probes `/health` and `/ready`. The supplied local logs also show the reliability suite and Docker smoke test passed.
 
 The successful CI workflow is tied to the exact commit above. If code changes after this point, verify the workflow for the new commit before calling that newer revision verified.
 
@@ -36,42 +36,39 @@ The successful CI workflow is tied to the exact commit above. If code changes af
 
 ### HLD — request and storage architecture
 
-```mermaid
-flowchart LR
-  Client[Customer / Admin / Postman] --> API[Gin REST API]
-  API --> DTO[HTTP handlers and request DTOs]
-  DTO --> AUTH[JWT / role middleware]
-  AUTH --> SVC[Services and business rules]
-  SVC --> PG[(PostgreSQL source of truth)]
-  SVC -. optional product cache .-> REDIS[(Redis: TTL + generation invalidation)]
-  PG --> PROVIDER[(Simulated provider ledger)]
-  WORKER[Expiry and reconciliation workers] --> SVC
-  API --> METRICS[/metrics + X-Request-ID/]
-  CI[GitHub Actions] -. tests, vet and container smoke .-> API
-```
+The system is a **modular monolith**: one deployable Go/Gin process contains the HTTP layer, services and background workers. PostgreSQL is the source of truth; Redis is an optional product-read cache, not a separate OrderFlow microservice.
 
-### LLD — order placement
+![OrderFlow high-level design](docs/diagrams/HLD.png)
 
-```mermaid
-sequenceDiagram
-  participant C as Client
-  participant H as Order handler / DTO validation
-  participant S as Order service
-  participant R as Repository
-  participant DB as PostgreSQL
-  C->>H: POST /orders + Idempotency-Key
-  H->>H: Authenticate and validate items
-  H->>S: CreateOrder(user, items, key)
-  S->>R: Begin transaction; lock idempotency key
-  S->>R: Read active prices; reserve stock in stable product order
-  S->>R: Insert order, order items and inventory movements
-  R->>DB: Commit atomically
-  DB-->>H: Order ID, PENDING, amount in paise
-  alt Any reservation or write fails
-    S->>DB: Rollback
-    H-->>C: Consistent error response
-  end
-```
+For the editable sources, see `docs/diagrams/HLD.dot` and `docs/diagrams/HLD.mmd`.
+
+### LLD — transactional order creation
+
+![OrderFlow low-level design: order creation and idempotency](docs/diagrams/LLD.png)
+
+The flow shows validation, a transaction-scoped idempotency lock, normalized payload comparison, conditional stock reservation, audit writes, commit, and rollback on conflict.
+
+### Database schema and cardinalities
+
+![Simplified OrderFlow relational schema](docs/diagrams/ERD.png)
+
+### Order/payment states
+
+![OrderFlow order and payment state transitions](docs/diagrams/ORDER_PAYMENT_STATE.png)
+
+### Concurrency, payment recovery and CI
+
+![Concurrent inventory reservation invariant](docs/diagrams/ORDER_CONCURRENCY.png)
+
+![Mock-provider callback and missed-callback recovery](docs/diagrams/PAYMENT_RECOVERY.png)
+
+![GitHub Actions Continuous Integration pipeline](docs/diagrams/CI_PIPELINE.png)
+
+### Proposed AWS target architecture
+
+![Proposed AWS architecture; not a live deployment](docs/diagrams/AWS_TARGET.png)
+
+All diagrams above are pre-rendered PNGs to display reliably in GitHub. Their editable Graphviz DOT sources are in `docs/diagrams/`; HLD/LLD/order-state Mermaid sources are retained too.
 
 ### Package responsibilities
 
@@ -95,18 +92,7 @@ Request DTOs currently live next to their relevant HTTP handlers; domain models 
 
 ### Order/payment states
 
-```mermaid
-stateDiagram-v2
-  [*] --> PENDING: Order created / stock reserved
-  PENDING --> CONFIRMED: Payment SUCCESS / stock consumed
-  PENDING --> FAILED: Payment FAILED / reservation released
-  PENDING --> CANCELLED: Customer cancels / reservation released
-  PENDING --> EXPIRED: Unpaid order expires / reservation released
-  CONFIRMED --> [*]
-  FAILED --> [*]
-  CANCELLED --> [*]
-  EXPIRED --> [*]
-```
+![OrderFlow order and payment state transitions](docs/diagrams/ORDER_PAYMENT_STATE.png)
 
 ## Prerequisites
 
@@ -243,8 +229,8 @@ Do not run the order-flow benchmark and API benchmark as one long chained comman
 
 `Dockerfile` is a multi-stage build. The GitHub Actions workflow (`.github/workflows/ci.yml`) runs on pushes and pull requests to `main`, starts temporary PostgreSQL and Redis service containers, checks module tidiness, applies migrations, runs tests/race/vet, checks whitespace, builds the image and smoke-tests `/health` and `/ready` inside a container.
 
-- Verified commit: `1515cb0`
-- Successful run: <https://github.com/manmohansharma21/orderflow/actions/runs/39160539244>
+- Latest reviewed HEAD: `3df0139`; last behavior-changing implementation: `1515cb0`
+- Successful run: <https://github.com/manmohansharma21/orderflow/actions/runs/39165514715>
 
 **CI means Continuous Integration.** It is an automated quality gate that repeats validation consistently when code changes. Learn the job step-by-step in `docs/CI_CONFIGURATION_WALKTHROUGH.md`; the tracker intentionally keeps this walkthrough as a learning task.
 
@@ -255,7 +241,7 @@ Editable diagrams:
 - `docs/diagrams/LLD.mmd`
 - `docs/diagrams/ORDER_PAYMENT_STATE.mmd`
 
-The README above embeds HLD, LLD and state diagrams so they render directly in GitHub Markdown. `docs/openapi.yaml`, `docs/OPENAPI_GUIDE.md`, `docs/DESIGN_PATTERNS.md` and `docs/REDIS_AND_RECONCILIATION.md` provide related detail. Keep diagrams and API contracts synchronized if endpoints or transitions change.
+The README references pre-rendered PNG diagrams to avoid client-side Mermaid parsing/version issues. Editable DOT and Mermaid sources remain available under `docs/diagrams/`. `docs/openapi.yaml`, `docs/OPENAPI_GUIDE.md`, `docs/DESIGN_PATTERNS.md` and `docs/REDIS_AND_RECONCILIATION.md` provide related detail. Keep diagrams and API contracts synchronized if endpoints or transitions change.
 
 ## Screenshots and report: final-stage procedure
 
@@ -283,3 +269,10 @@ The portal screenshot shows three separate deliverables: (1) public GitHub URL, 
 - Redis did not speed up the measured small local workload; further performance claims require new measurement.
 - AWS infrastructure is documented, not deployed. Only claim live AWS after creating resources with approval and verifying the live endpoint. Whether a live AWS deployment is mandatory must be confirmed against any separate assignment/contest rubric; the supplied submission screen itself requests a repo link, project ZIP, report PDF and declarations, not an AWS URL.
 - Screenshots and final report PDF are a last-mile evidence task. This source README is the operating guide; the Word report is maintained separately from the code ZIP.
+
+
+## Screenshot evidence status (19 October 2026)
+
+Genuine local evidence already committed under `docs/evidence/` includes a combined HTTP 200 health/readiness terminal capture, the `/metrics` exposition, and an initial development log showing `POST /orders` returning 201. The early migration-only capture and readiness-only duplicate are kept in `initial-captures/` and are not evidence of the final schema. A screenshot that exposed a local `DATABASE_URL` password was deliberately excluded.
+
+The final Postman screenshots still need to be taken from actual passing requests: auth/401/403, product admin/409, inventory audit, multi-product order/idempotency/cancellation, payment callback and missed-callback recovery/reports. Also capture a green Actions run for the final evidence commit and a fresh Docker smoke test. Follow `docs/evidence/README.md` and `docs/evidence/POSTMAN_SCREENSHOT_RUNBOOK.md`; do not include tokens, passwords or webhook signatures.

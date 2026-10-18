@@ -1,0 +1,18 @@
+digraph OrderPaymentState {
+ graph [rankdir=LR, bgcolor="white", pad="0.20", nodesep="0.35", ranksep="0.55", splines=polyline,
+        fontname="Arial", fontsize=19, labelloc="t", label="ORDERFLOW — ORDER / PAYMENT STATE TRANSITIONS"];
+ node [shape=oval, style="filled", fontname="Arial", fontsize=10, margin="0.16,0.10", penwidth=1.2];
+ edge [fontname="Arial", fontsize=9, color="#50657D", fontcolor="#34495E", arrowsize=0.75, penwidth=1.05];
+ start [label="Create order", fillcolor="#EEF5FF", color="#4976A8", fontcolor="#16324F"];
+ pending [label="PENDING\nStock reserved", fillcolor="#FFF4D6", color="#C59A34", fontcolor="#6B4C00"];
+ confirmed [label="CONFIRMED\nPayment success; consume\non-hand + reserved stock", fillcolor="#DDF4E4", color="#3C8D63", fontcolor="#1D5B39"];
+ failed [label="FAILED\nPayment failed; release\nreservation once", fillcolor="#FCE8E6", color="#C65C54", fontcolor="#7C2520"];
+ cancelled [label="CANCELLED\nCustomer cancels; release\nreservation once", fillcolor="#ECEFF3", color="#778899", fontcolor="#273746"];
+ expired [label="EXPIRED\nEligible unpaid order expires;\nrelease reservation once", fillcolor="#FBE9D8", color="#C8852B", fontcolor="#744315"];
+ start -> pending [label="reserve inventory"];
+ pending -> confirmed [label="SUCCESS"];
+ pending -> failed [label="FAILED"];
+ pending -> cancelled [label="cancel request"];
+ pending -> expired [label="age + no pending/success payment"];
+ {rank=same; confirmed; failed; cancelled; expired;}
+}

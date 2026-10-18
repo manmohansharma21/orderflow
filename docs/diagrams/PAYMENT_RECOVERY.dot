@@ -1,0 +1,23 @@
+digraph PaymentRecovery {
+ graph [rankdir=TB, bgcolor="white", pad="0.18", nodesep="0.25", ranksep="0.35", splines=polyline,
+        fontname="Arial", fontsize=18, labelloc="t", label="MOCK PAYMENT CALLBACK AND RECONCILIATION"];
+ node [shape=box, style="rounded,filled", fontname="Arial", fontsize=10, margin="0.14,0.09", color="#4976A8", fillcolor="#EEF5FF", fontcolor="#16324F"];
+ edge [fontname="Arial", fontsize=8, color="#50657D", fontcolor="#34495E", arrowsize=0.7];
+ start [label="Order PENDING\nPayment PENDING", fillcolor="#FFF4D6", color="#C59A34"];
+ provider [label="Separate simulated-provider ledger\nrecords SUCCESS / FAILED terminal outcome", fillcolor="#FFF4E5", color="#C8852B"];
+ callback [label="Normal callback path\nverify HMAC, payment ID, amount, currency, event ID", fillcolor="#F4F0FF", color="#8567B5"];
+ missed [shape=diamond, label="Callback delivered?", fillcolor="#FFF4D6", color="#C59A34"];
+ worker [label="Reconciliation worker\nfind known terminal outcome with app payment still pending", fillcolor="#FFF4E5", color="#C8852B"];
+ shared [label="Shared validation + state transition\nlock state; apply once", fillcolor="#EEF5FF"];
+ ok [label="SUCCESS: CONFIRMED\nconsume on-hand + reserved stock\nORDER_FULFILLED audit", fillcolor="#DDF4E4", color="#3C8D63"];
+ failed [label="FAILED: FAILED\nrelease reserved stock once\nORDER_RELEASED audit", fillcolor="#FCE8E6", color="#C65C54"];
+ unknown [label="Outcome unknown\nremain pending / report for review", fillcolor="#ECEFF3", color="#778899"];
+ start -> provider -> missed;
+ missed -> callback [label="Yes"];
+ missed -> worker [label="No"];
+ callback -> shared;
+ worker -> shared;
+ shared -> ok [label="Outcome SUCCESS"];
+ shared -> failed [label="Outcome FAILED"];
+ provider -> unknown [style=dashed, label="no terminal result", constraint=false];
+}

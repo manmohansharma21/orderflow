@@ -1,14 +1,12 @@
 stateDiagram-v2
-    [*] --> PENDING: Create order / reserve stock
-    PENDING --> CONFIRMED: SUCCESS payment / consume stock
-    PENDING --> FAILED: FAILED payment / release stock
-    PENDING --> CANCELLED: Customer cancellation / release stock
-    PENDING --> EXPIRED: Safe expiry / release stock
+    [*] --> PENDING: Create order and reserve stock
+    PENDING --> CONFIRMED: SUCCESS payment; consume stock
+    PENDING --> FAILED: FAILED payment; release reservation
+    PENDING --> CANCELLED: Customer cancels; release reservation
+    PENDING --> EXPIRED: Eligible unpaid order expires; release reservation
     note right of PENDING
-      Pending/unresolved provider outcomes
-      must not be expired. Reconciliation
-      applies known provider results through
-      the same callback transition path.
+      Pending or successful payments are not expired blindly.
+      Reconciliation applies known simulated provider outcomes.
     end note
     CONFIRMED --> [*]
     FAILED --> [*]

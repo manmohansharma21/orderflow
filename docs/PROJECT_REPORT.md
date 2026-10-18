@@ -4,8 +4,9 @@
 **Programme:** Master of Science in Computer Science, Scaler Neovarsity - Woolf
 **Supervisor shown in template:** Naman Bhalla
 **Repository:** https://github.com/manmohansharma21/orderflow
-**Implementation revision reviewed:** `1515cb0`
-**CI:** successful run https://github.com/manmohansharma21/orderflow/actions/runs/39160539244
+**Last verified code baseline:** `3df0139`
+**GitHub Actions:** https://github.com/manmohansharma21/orderflow/actions/runs/39163364836 (success)
+**Evidence/doc revision:** pending a new green CI run after the diagram and screenshot patch is pushed.
 
 This Markdown file is the technical content source for the separate Word report. Use the supplied Word review draft as the submission layout; it follows the official report template structure, includes HLD/LLD/state diagrams and screenshot placeholders, and must be completed and exported to PDF after the final evidence session. Do not submit this Markdown file instead of the PDF required by the portal.
 
@@ -23,7 +24,19 @@ The business goal is to show a reliable backend flow from catalogue and inventor
 
 The application is a modular monolith. The HTTP layer validates transport shapes and maps errors; services apply business rules and coordinate transitions; repositories perform parameterized SQL and locking; PostgreSQL keeps source-of-truth state. `internal/cache` contains the Redis adapter; `internal/worker` contains provider recovery/reporting and unpaid-order expiry; `internal/observability` provides request IDs and an HTTP latency histogram.
 
-See `docs/diagrams/HLD.mmd`, `docs/diagrams/LLD.mmd`, and `docs/diagrams/ORDER_PAYMENT_STATE.mmd`. HLD/LLD are also embedded in `README.md` and the Word report draft. The database includes users, products, inventory, inventory movements, orders, order items, payments and the mock-provider transaction ledger. Migrations are ordered `000001`–`000008`.
+### High-level design (HLD)
+
+![OrderFlow high-level design](diagrams/HLD.png)
+
+### Low-level design (LLD)
+
+![OrderFlow order-creation design](diagrams/LLD.png)
+
+### Order/payment state transitions
+
+![OrderFlow order/payment states](diagrams/ORDER_PAYMENT_STATE.png)
+
+Editable Graphviz sources are `docs/diagrams/HLD.dot`, `LLD.dot`, and `ORDER_PAYMENT_STATE.dot`; simpler Mermaid source equivalents are kept beside them. The report uses the static PNG renderings to avoid browser rendering errors. The database includes users, products, inventory, inventory movements, orders, order items, payments and the mock-provider transaction ledger. Migrations are ordered `000001`–`000008`.
 
 ## Main endpoint groups
 
@@ -52,9 +65,9 @@ Secrets are local environment configuration and must not be committed. Admin-onl
 
 ## Test and deployment evidence
 
-The verified revision is `1515cb0`. Its [GitHub Actions run](https://github.com/manmohansharma21/orderflow/actions/runs/39160539244) passed the pipeline, including disposable PostgreSQL/Redis, migrations 000001–000008, unit/integration tests, integration race checks, vet, whitespace checks, Docker image build and `/health`/`/ready` smoke probes. Local terminal evidence also confirms `scripts/verify-residual-milestone.sh` passed and `scripts/docker-smoke-test.sh` returned the expected status bodies.
+Code baseline `3df0139` has a successful [GitHub Actions run](https://github.com/manmohansharma21/orderflow/actions/runs/39163364836), including disposable PostgreSQL/Redis, migrations 000001–000008, unit/integration tests, race checks, vet, whitespace checks, Docker image build and `/health`/`/ready` smoke probes. Any further patch needs its own green run. Local terminal evidence also confirms `scripts/verify-residual-milestone.sh` passed and `scripts/docker-smoke-test.sh` returned the expected status bodies.
 
-Do not use fabricated screenshots: see `docs/evidence/README.md`. The last screenshot session should cover Postman auth/catalogue, inventory, order lifecycle, payment success/failure and recovery, admin reports, Docker health/readiness, the green Actions run, and performance results.
+Do not use fabricated screenshots: see `docs/evidence/README.md`. The final screenshot session should cover Postman auth/catalogue (including 401 and 403), inventory, multi-product order/idempotency/cancellation, payment success/failure/recovery, admin reports, Docker health/readiness, the green Actions run, request metrics and benchmark results. The first health/readiness, metrics and initial order-log captures are recorded in `docs/evidence/README.md`.
 
 ## Performance results
 
@@ -68,7 +81,7 @@ The measured local `GET /products?page=1&limit=20` API run used 300 requests per
 | Mean | 3.315 ms | 5.702 ms |
 | Throughput | 2,821.81 req/s | 1,697.92 req/s |
 
-This local test showed Redis slower than direct PostgreSQL reads for the current small dataset. The results are environment/load-specific and do not prove Redis is universally slower; they do mean the report must not claim a speedup. The service/repository order benchmark produced order-creation samples but was interrupted before the order-history result completed. Complete the bounded history benchmark if it is required before including a value.
+This local test showed Redis slower than direct PostgreSQL reads for the current small dataset. The results are environment/load-specific and do not prove Redis is universally slower; they do mean the report must not claim a speedup. The bounded service/repository benchmark completed at baseline `3df0139`: order creation `1,848,705 ns/op`, `5,892 B/op`, `112 allocs/op`; order history `551,748 ns/op`, `19,837 B/op`, `312 allocs/op`. These one-sample Apple M2 measurements are not HTTP latency percentiles.
 
 ## Scope limitations and next steps
 
@@ -77,12 +90,8 @@ A live AWS deployment is not claimed. The repository has an AWS deployment plan 
 Finish by running the final Postman collection, capturing genuine evidence, inserting images into the Word review draft, updating table/figure page numbers after layout settles, replacing only personal date placeholders with correct dates, checking citations and required AI-tool acknowledgement, and exporting a final PDF. The candidate must sign their own declaration; the supervisor certification should not be signed by the candidate.
 
 
-## Evidence refresh — 19 October 2026
+## Architecture diagrams and screenshot evidence update — 19 October 2026
 
-This section supersedes earlier status statements above where they refer to stale verification or benchmark state.
+README and report figures link to pre-rendered PNGs in `docs/diagrams/` so the architecture is visible in browsers that do not support Mermaid rendering consistently. Editable DOT sources are retained, along with Mermaid sources for HLD/LLD/state transitions. The screenshots supplied so far evidence local `/health` and `/ready` HTTP 200, `/metrics` counters/histogram, and an earlier `POST /orders` HTTP 201. These do not yet replace the final Postman status-code evidence listed in `docs/evidence/POSTMAN_SCREENSHOT_RUNBOOK.md`. The first migration-only screenshot is archived as historical only; one screenshot that exposed a local database password was excluded from the repository patch.
 
-- Verified implementation commit at this review: `3c708ab`; GitHub Actions passed at https://github.com/manmohansharma21/orderflow/actions/runs/39163364836.
-- Local `/health`, `/ready`, `/metrics` browser captures and an initial development server log are saved under `docs/evidence/`. The server log is supporting evidence only.
-- Product-list API benchmark: no cache P50 2.480 ms / P95 4.270 ms / 2,821.81 req/s; warm Redis P50 4.447 ms / P95 13.966 ms / 1,697.92 req/s. Redis was slower for this workload; no speedup is claimed.
-- Bounded service-level benchmark: order creation 1,848,705 ns/op (5,892 B/op, 112 allocs/op); order history 551,748 ns/op (19,837 B/op, 312 allocs/op). These are single-sample service/repository-path measurements, not HTTP latency percentiles.
-- Still needed for submission: final green-CI screenshot for the submitted SHA, Docker smoke/build screenshot, Postman business-flow screenshots, benchmark screenshot(s), metadata/reference checks, and Word-to-PDF export. AWS evidence is conditional on the rubric; the diagram is target architecture, not proof of deployment.
+Latest reviewed remote HEAD is `3df0139`, whose GitHub Actions run succeeded: https://github.com/manmohansharma21/orderflow/actions/runs/39165514715. The Word report/PDF cannot be considered submission-ready until the candidate fills the real module start/end dates and actual submission date, signs the declaration, has the supervisor complete certification, and captures the remaining Postman/CI/Docker evidence.

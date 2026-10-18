@@ -1,0 +1,30 @@
+digraph OrderFlowLLD {
+ graph [rankdir=TB, bgcolor="white", pad="0.20", nodesep="0.24", ranksep="0.33", splines=polyline,
+        fontname="Arial", fontsize=19, labelloc="t", label="ORDERFLOW — LOW-LEVEL DESIGN (LLD): ORDER CREATION"];
+ node [shape=box, style="rounded,filled", fontname="Arial", fontsize=11, margin="0.15,0.10",
+       color="#4976A8", fillcolor="#EEF5FF", fontcolor="#16324F", penwidth=1.2];
+ edge [fontname="Arial", fontsize=9, color="#50657D", fontcolor="#34495E", arrowsize=0.75, penwidth=1.05];
+ start [shape=oval, label="POST /orders\nBearer JWT + Idempotency-Key", fillcolor="#DDEBFF"];
+ validate [label="HTTP handler validates JWT, JSON,\n1–50 distinct item lines and key"];
+ begin [label="Order service opens PostgreSQL transaction\nand serializes user + idempotency key"];
+ exists [shape=diamond, style="filled", label="Key already\nexists?", fillcolor="#FFF4D6", color="#C59A34"];
+ match [shape=diamond, style="filled", label="Normalized payload\nhash matches?", fillcolor="#FFF4D6", color="#C59A34"];
+ replay [label="Return original order\nHTTP 200 OK", fillcolor="#EAF7EF", color="#3C8D63"];
+ conflict [label="Reject same key + different payload\nHTTP 409 Conflict", fillcolor="#FCE8E6", color="#C65C54"];
+ reserve [label="Read active products + server prices;\nreserve stock in stable product-ID order"];
+ stock [shape=diamond, style="filled", label="Every line\nreserved?", fillcolor="#FFF4D6", color="#C59A34"];
+ rollback [label="ROLLBACK — no partial order or reservations\nReturn conflict/error", fillcolor="#FCE8E6", color="#C65C54"];
+ insert [label="Insert order header, immutable item snapshots\nand ORDER_RESERVED audit movements"];
+ commit [label="COMMIT transaction", fillcolor="#EAF7EF", color="#3C8D63"];
+ created [shape=oval, label="Return order ID + PENDING\nHTTP 201 Created", fillcolor="#DDF4E4", color="#3C8D63"];
+ start -> validate -> begin -> exists;
+ exists -> match [label="Yes"];
+ match -> replay [label="Yes"];
+ match -> conflict [label="No"];
+ exists -> reserve [label="No"];
+ reserve -> stock;
+ stock -> rollback [label="No"];
+ stock -> insert [label="Yes"];
+ insert -> commit -> created;
+ {rank=same; replay; conflict;}
+}

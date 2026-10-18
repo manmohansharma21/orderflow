@@ -1,0 +1,17 @@
+digraph OrderConcurrency {
+ graph [rankdir=TB, bgcolor="white", pad="0.18", nodesep="0.25", ranksep="0.34", splines=polyline,
+        fontname="Arial", fontsize=18, labelloc="t", label="CONCURRENCY CONTROL — NO INVENTORY OVERSELL"];
+ node [shape=box, style="rounded,filled", fontname="Arial", fontsize=10, margin="0.14,0.09", color="#4976A8", fillcolor="#EEF5FF", fontcolor="#16324F"];
+ edge [fontname="Arial", fontsize=8, color="#50657D", fontcolor="#34495E", arrowsize=0.7];
+ start [label="10 concurrent requests\n5 units available", fillcolor="#DDEBFF"];
+ tx [label="Each request uses PostgreSQL transaction\nconditional stock reservation + deterministic product ordering"];
+ guard [shape=diamond, label="Stock update succeeds\nfor this request?", fillcolor="#FFF4D6", color="#C59A34"];
+ success [label="Create order + item snapshots + audit\nCommit reservation", fillcolor="#DDF4E4", color="#3C8D63"];
+ fail [label="Rollback request\nReturn conflict; no partial writes", fillcolor="#FCE8E6", color="#C65C54"];
+ result [label="Expected invariant\nexactly 5 orders succeed; reserved = 5\nno overselling", fillcolor="#EAF7EF", color="#3C8D63"];
+ start -> tx -> guard;
+ guard -> success [label="Yes"];
+ guard -> fail [label="No"];
+ success -> result;
+ fail -> result;
+}

@@ -1,46 +1,46 @@
 # OrderFlow evidence and screenshot guide
 
-Use genuine screenshots only. Do not include bearer tokens, passwords, webhook signatures, database URLs, `.env`, secrets, or unrelated account details.
+This folder uses real screenshots only. Do not include bearer tokens, passwords, database URLs, webhook secrets/signatures, or personal account details. The same PNGs should be inserted into the final Word report after the final Postman run.
 
-## Captured already
+## Captured and suitable already
 
-| Capture | File | Status and use |
+| Capture | File | Meaning / limitation |
 |---|---|---|
-| Local health response | `browser/01-health-endpoint.png` | Captured; response body shows `{"status":"ok"}` |
-| Local readiness response | `browser/02-readiness-endpoint.png` | Captured; response body shows `{"status":"ready"}` |
-| HTTP metrics exposition | `observability/01-request-metrics.png` | Captured; displays request counters and histogram buckets |
-| Initial Go server log | `docker/02-local-server-log-order-201-initial.png` | Supplementary only; shows local development startup and one `POST /orders` with HTTP 201 |
+| Combined health/readiness terminal check | `browser/01-health-readiness-http-200.png` | Shows `curl -i` returning HTTP 200 for `/health` and `/ready`, with JSON bodies `ok` and `ready`. |
+| Prometheus exposition | `observability/01-request-metrics.png` | Shows request counters and latency histogram buckets at `/metrics`; the page itself does not calculate p95. |
+| Initial local Go API log | `docker/02-local-server-log-order-201-initial.png` | Shows an earlier local `POST /orders` returning 201; supplementary historical evidence, not the final end-to-end workflow. |
+| Docker Compose container health (cropped) | `initial-captures/01-docker-compose-ps-redacted-crop.png` | Cropped from the earlier terminal capture to exclude visible credentials; historical setup context only. |
+| Initial migration output | `initial-captures/02-early-migration-only-not-final.png` | Shows only migration 000001 and the first three tables; historical only, not final schema proof. |
+| Readiness browser body only | `initial-captures/03-readiness-body-only-duplicate.png` | Duplicate, less useful than the combined HTTP status-line capture. |
 
-The terminal output supplied on 19 October separately showed `curl -i` returning HTTP 200 for `/health` and `/ready`. The browser screenshots show the response bodies but not the status line. Raw image originals are preserved under `initial-captures/`. See [`INITIAL_SCREENSHOTS_CAPTURED.md`](INITIAL_SCREENSHOTS_CAPTURED.md).
+The original screenshot with `grep DATABASE_URL .env` visibly exposed a local connection URL and password. It is **not included** in the repository patch. If that password was reused outside a disposable local environment, rotate it. GitHub device authorization, Downloads-folder, Scaler form, and ChatGPT-preview screenshots are not application evidence and are not included.
 
-## Still to capture after final verification
+## Remaining screenshots: take these after final local test and green CI
 
-| Capture after | Exact filename | Report placement |
-|---|---|---|
-| Latest pushed HEAD has a green Actions run | `ci/01-github-actions-green.png` | Chapter 14; show final submitted SHA |
-| Local Docker build/smoke script succeeds | `docker/01-health-readiness.png` | Chapter 14; include build and `/health`/`/ready` |
-| Customer login/profile succeeds | `postman/01-auth-profile.png` | Chapter 7; show profile result, not token |
-| Product create/update and duplicate SKU test run | `postman/02-product-admin.png` | Chapter 7 |
-| Inventory availability, receipt/adjustment and movements run | `postman/03-inventory-audit.png` | Chapters 8–9 |
-| Multi-product order, idempotent replay/conflict and cancellation run | `postman/04-order-lifecycle.png` | Chapters 8–9 |
-| Signed payment success/failure, invalid signature and replay run | `postman/05-payment-callbacks.png` | Chapter 10 |
-| Missed callback recovered and admin reports run | `postman/06-reconciliation-and-reports.png` | Chapter 10/reporting |
-| API cache benchmark run | `performance/01-api-cache-benchmark.png` | Chapter 13; include real workload and negative cache result |
-| Bounded service benchmarks | `performance/02-order-benchmarks.png` | Chapter 13; distinguish service ns/op from HTTP P95 |
-| `/metrics` and `X-Request-ID` verified with a representative request | `observability/02-request-id-postman.png` | Chapters 11–12 |
-| Swagger UI loads `docs/openapi.yaml` (optional) | `api-docs/01-swagger-ui.png` | Chapter 7/appendix |
-| Real approved AWS deployment, only if required | `aws/01-live-health.png` | Chapter 15; otherwise keep absent |
+| Sequence | Test to perform | Save as | Report placement |
+|---|---|---|---|
+| 1 | GitHub Actions run for the latest pushed evidence commit is green; show the commit SHA | `ci/01-github-actions-green.png` | Chapter 14 |
+| 2 | Docker image build/smoke succeeds and both health/readiness are 200 | `docker/01-health-readiness.png` | Chapter 14 |
+| 3 | Login/profile plus deliberate missing-token 401 and customer-token admin-route 403 | `postman/01-auth-profile-and-authorization.png` | Chapter 7 |
+| 4 | ADMIN product create 201, duplicate SKU 409, update 200, deactivate 200 / inactive detail 404 | `postman/02-product-admin.png` | Chapter 7 |
+| 5 | Inventory availability, stock receipt, adjustment and movement audit | `postman/03-inventory-audit.png` | Chapters 8–9 |
+| 6 | Multi-product order 201, same-key replay 200, changed-payload reuse 409, detail/list and cancel 200 / repeat cancel 409 | `postman/04-order-lifecycle.png` | Chapters 8–9 |
+| 7 | Payment initiate, signed SUCCESS, signed FAILED, invalid signature 401, amount/currency mismatch 422, callback replay | `postman/05-payment-callbacks.png` | Chapter 10 |
+| 8 | Missed callback: set terminal result in mock ledger, run reconciliation, show recovered order and admin order/sales/inventory reports | `postman/06-reconciliation-and-reports.png` | Chapter 10 and reporting |
+| 9 | Real product API benchmark output, show both cache-disabled and warm-cache variants | `performance/01-api-cache-benchmark.png` | Chapter 13 |
+| 10 | Completed bounded order-creation/history service benchmark output | `performance/02-order-benchmarks.png` | Chapter 13; do not label these HTTP percentiles |
+| 11 | `/metrics` and a representative response header `X-Request-ID` | `observability/02-request-id-postman.png` | Chapters 11–12 |
+| 12 | Optional: Swagger UI successfully loads `docs/openapi.yaml` | `api-docs/01-swagger-ui.png` | Chapter 7 / appendix |
+| 13 | Only if a real, approved AWS deployment is required and done: live health/readiness and redacted service status | `aws/01-live-health.png` | Chapter 15 |
 
-## macOS screenshot steps
+## macOS capture instructions
 
-1. Arrange the relevant result in a readable window.
-2. Press **Command + Shift + 4** and drag to crop.
-3. Save the PNG with the exact path listed above.
-4. Inspect it before committing; redact sensitive data if needed.
-5. Insert that same PNG into the matching Word report chapter.
+1. Arrange the relevant browser/Postman/terminal window so the request name, method/path, HTTP status, meaningful response, and (for CI) actual SHA are readable.
+2. Press **Command + Shift + 4**, then drag a tight crop.
+3. Save the PNG in the exact repository path in the table.
+4. Inspect the image and redact secrets before staging. Do not alter result content; cropping unrelated areas is fine.
+5. Insert that same image into the corresponding report chapter, then export the PDF after page numbers/figure lists are refreshed.
 
-The API-level product-list benchmark is committed under `performance/benchmark-results-20261018T191309Z.txt`. The warm Redis path was slower for this local workload. The completed bounded service benchmark output is `performance/order-flow-benchmarks-20261018T202650Z.txt`: order creation 1,848,705 ns/op (5,892 B/op, 112 allocs/op) and order history 551,748 ns/op (19,837 B/op, 312 allocs/op). These are single-sample local service/repository-path measurements, not HTTP P95 values.
+## Architecture clarification
 
-## No microservices screenshots
-
-OrderFlow is a modular monolith. Evidence should show its actual API routes, Go package layers, PostgreSQL/Redis dependencies, workers/reconciliation, tests and CI. Do not imply the application is split into separately deployed microservices.
+OrderFlow is a **modular monolith**, not a microservices system. The HTTP APIs are routes in one Go/Gin process. `internal/http`, `service`, `repository`, `domain`, `cache`, `worker`, and `observability` are modules/packages, not separate deployed services. PostgreSQL and optional Redis are infrastructure dependencies. Evidence should show APIs, transactional behavior, workers, DB/cache, and CI; do not invent service-to-service screenshots.

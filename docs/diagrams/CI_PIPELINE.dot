@@ -1,0 +1,15 @@
+digraph OrderFlowCI {
+ graph [rankdir=LR, bgcolor="white", pad="0.18", nodesep="0.22", ranksep="0.36", splines=polyline,
+        fontname="Arial", fontsize=18, labelloc="t", label="CONTINUOUS INTEGRATION — GITHUB ACTIONS"];
+ node [shape=box, style="rounded,filled", fontname="Arial", fontsize=10, margin="0.13,0.08", color="#4976A8", fillcolor="#EEF5FF", fontcolor="#16324F"];
+ edge [fontname="Arial", fontsize=8, color="#50657D", fontcolor="#34495E", arrowsize=0.7];
+ push [label="Push / pull request\nmain branch", fillcolor="#DDEBFF"];
+ services [label="Start disposable PostgreSQL + Redis\nhealth checks + test env"];
+ migrate [label="Check go.mod/go.sum\napply migrations 000001–000008"];
+ test [label="go test ./...\nPostgres / Redis integration + unit tests"];
+ race [label="go test -race\nvet + git diff --check"];
+ build [label="Build Docker image"];
+ smoke [label="Run container\nGET /health + GET /ready"];
+ result [label="Green: exact commit verified\nRed: stop and inspect logs", fillcolor="#DDF4E4", color="#3C8D63"];
+ push -> services -> migrate -> test -> race -> build -> smoke -> result;
+}

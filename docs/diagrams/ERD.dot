@@ -1,0 +1,25 @@
+digraph OrderFlowERD {
+ graph [rankdir=TB, bgcolor="white", pad="0.18", nodesep="0.28", ranksep="0.42", splines=polyline,
+        fontname="Arial", fontsize=18, labelloc="t", label="ORDERFLOW — RELATIONAL DATABASE SCHEMA (SIMPLIFIED)"];
+ node [shape=record, style="filled", fontname="Arial", fontsize=9, margin="0.07,0.05",
+       color="#6B7F95", fillcolor="#F6F9FC", fontcolor="#1F2D3D", penwidth=1.0];
+ edge [fontname="Arial", fontsize=8, color="#50657D", fontcolor="#34495E", arrowsize=0.68];
+ users [label="{users|PK id UUID|email UNIQUE|password_hash|role}"];
+ products [label="{products|PK id UUID|sku UNIQUE|name / price_paise|is_active}"];
+ inventory [label="{inventory|PK/FK product_id|on_hand_quantity|reserved_quantity}", fillcolor="#EAF7EF"];
+ orders [label="{orders|PK id UUID|FK user_id|status / total_amount_paise|idempotency_key + request_hash}", fillcolor="#FFF4D6"];
+ items [label="{order_items|PK id UUID|FK order_id|FK product_id|quantity + price snapshots}"];
+ payments [label="{payments|PK id UUID|FK order_id|status / amount / currency|idempotency + callback event|failure_reason}", fillcolor="#F4F0FF"];
+ moves [label="{inventory_movements|PK id UUID|FK product_id|movement_type / deltas|resulting balances / reason}"];
+ mock [label="{mock_provider_transactions|PK/FK payment_id|provider_payment_id UNIQUE|status / amount / currency|failure_reason}", fillcolor="#FFF4E5"];
+ users -> orders [label="1 : many"];
+ products -> inventory [label="1 : 1"];
+ orders -> items [label="1 : many"];
+ products -> items [label="1 : many"];
+ orders -> payments [label="1 : many attempts"];
+ products -> moves [label="1 : many"];
+ payments -> mock [label="1 : 1 for MOCK"];
+ {rank=same; users; products;}
+ {rank=same; orders; inventory;}
+ {rank=same; items; payments; moves;}
+}

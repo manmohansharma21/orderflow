@@ -1,0 +1,13 @@
+digraph OrderFlowLifecycle {
+ graph [rankdir=LR, bgcolor="white", pad="0.15", nodesep="0.22", ranksep="0.32", splines=polyline,
+        fontname="Arial", fontsize=18, labelloc="t", label="PROJECT DEVELOPMENT AND VERIFICATION LIFECYCLE"];
+ node [shape=box, style="rounded,filled", fontname="Arial", fontsize=10, margin="0.14,0.08", color="#4976A8", fillcolor="#EEF5FF", fontcolor="#16324F"];
+ edge [fontname="Arial", fontsize=8, color="#50657D", fontcolor="#34495E", arrowsize=0.7];
+ req [label="Requirements\nand scope"];
+ design [label="HLD / LLD\nschema / API contract"];
+ code [label="Incremental Go\nimplementation"];
+ test [label="Unit + integration\nconcurrency / race"];
+ ci [label="Docker + CI\nmetrics / benchmarks"];
+ evidence [label="Postman screenshots\nreport + submission"];
+ req -> design -> code -> test -> ci -> evidence;
+}

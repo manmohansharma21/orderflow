@@ -1,0 +1,15 @@
+digraph OrderRequestFlow {
+ graph [rankdir=TB, bgcolor="white", pad="0.18", nodesep="0.25", ranksep="0.35", splines=polyline,
+        fontname="Arial", fontsize=18, labelloc="t", label="FEATURE FLOW — CREATE A MULTI-PRODUCT ORDER"];
+ node [shape=box, style="rounded,filled", fontname="Arial", fontsize=10, margin="0.14,0.09", color="#4976A8", fillcolor="#EEF5FF", fontcolor="#16324F"];
+ edge [fontname="Arial", fontsize=8, color="#50657D", fontcolor="#34495E", arrowsize=0.7];
+ client [label="Client: POST /orders\nitems[] + JWT + Idempotency-Key", fillcolor="#DDEBFF"];
+ handler [label="Handler / DTO\nvalidate body, auth, key and line count"];
+ service [label="Order service\nnormalize lines, hash payload, orchestrate use case"];
+ repo [label="Repository transaction\nread server prices, reserve stock, write order/items/movements"];
+ db [shape=cylinder, label="PostgreSQL\nCOMMIT all writes together", fillcolor="#EAF7EF", color="#3C8D63"];
+ ok [label="201 Created\nPENDING order + total", fillcolor="#DDF4E4", color="#3C8D63"];
+ err [label="400 / 409 / 404\nNo partial reservation", fillcolor="#FCE8E6", color="#C65C54"];
+ client -> handler -> service -> repo -> db -> ok;
+ repo -> err [label="validation / stock / DB conflict", color="#C65C54"];
+}
