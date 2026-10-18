@@ -24,10 +24,18 @@ Both should return `HTTP/1.1 200 OK`. If port 8080 is already in use, do not sta
 
 1. Download `OrderFlow_Guided_Evidence.postman_collection.json` from this folder.
 2. Open Postman → **Import** → select the JSON file.
-3. Expand the collection **OrderFlow — Guided Local API Evidence Run**.
+3. Expand the collection **OrderFlow — Guided Local API Evidence Run (Admin Token Fix)**.
 4. Open the collection's **Variables**. The `baseUrl` should be `http://localhost:8080`.
 5. The default admin credentials are the local test user previously used in this repo (`of.admin.test.20261018@example.com`). If the login request fails, update `adminEmail` and `adminPassword` in Postman's **Current value** to the existing ADMIN account in your local `orderflow` database. Do not paste credentials into chat or commit populated values.
 6. For signed webhook requests, set `mockPaymentWebhookSecret` in Postman's **Current value** to the exact local `MOCK_PAYMENT_WEBHOOK_SECRET` from `.env`. Keep it local; never share screenshots showing it, export populated secrets, or commit it. It must be at least 32 characters.
+
+## Admin token guard and product authorization (important)
+
+Run the complete **01 — Authentication and RBAC** folder, including **05 — Login existing ADMIN**, before the product-admin, inventory-admin, reconciliation, or report folders. The admin login must return `200`, show `user.role: ADMIN`, and pass its role-verification test. The collection now clears stale admin tokens and refuses to store a token unless the role is `ADMIN`.
+
+`GET /products` is intentionally public and should return `200` without login. `POST /products`, `PATCH /products/:id`, and `DELETE /products/:id` require ADMIN. `401 bearer token required` means the token is empty/unresolved; `403 insufficient permissions` means the token belongs to a non-admin user. See `POSTMAN_ADMIN_TOKEN_TROUBLESHOOTING.md` for the local-only fallback if the configured admin account is absent.
+
+After creating Product A and Product B successfully (`201` each), run the multi-product order create (`201`) and then **05 — Order history** (`200`). That sequence creates the history records for the current local customer.
 
 ## 2. Run manually in order
 
@@ -142,3 +150,6 @@ Then verify a green GitHub Actions run for the new commit.
 | Admin report | `200` |
 
 The default architecture is a **modular monolith**: a single Go/Gin process with modules and REST endpoints. It is not a microservices deployment. PostgreSQL and Redis are backing services, not separate OrderFlow business microservices.
+
+
+See `POSTMAN_ADMIN_TOKEN_TROUBLESHOOTING.md` for diagnostics of empty-token `401` and customer-role `403` responses.

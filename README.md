@@ -1,8 +1,8 @@
 # OrderFlow — E-commerce Order and Payment Management API
 
-**Author:** Manmohan Sharma  
-**Repository:** <https://github.com/manmohansharma21/orderflow>  
-**Source of truth:** the public `main` branch. Always verify the GitHub Actions run for the exact commit being submitted.  
+**Author:** Manmohan Sharma
+**Repository:** <https://github.com/manmohansharma21/orderflow>
+**Source of truth:** the public `main` branch. Always verify the GitHub Actions run for the exact commit being submitted.
 **Latest CI result:** [GitHub Actions run 39165514715](https://github.com/manmohansharma21/orderflow/actions/runs/39165514715) — completed successfully. The last behavior-changing implementation commit is `1515cb0`; later commits complete benchmark fixes and documentation/evidence.
 
 OrderFlow is a Go/Gin REST backend demonstrating catalogue, inventory, transactional order placement, simulated payment processing, idempotency, recovery of missed simulated-provider callbacks, operational reports and request observability. PostgreSQL is the source of truth. Redis is an optional product-read cache and is **disabled by default** because the tested local workload was slower with the warm cache.
@@ -136,7 +136,7 @@ Request DTOs currently live next to their relevant HTTP handlers; domain models 
 
 ## Main REST APIs
 
-The full OpenAPI 3.0 contract is `docs/openapi.yaml`; import `docs/postman/OrderFlow.postman_collection.json` into Postman.
+The full OpenAPI 3.0 contract is `docs/openapi.yaml`; import `docs/postman/OrderFlow_Guided_Evidence.postman_collection.json` into Postman.
 
 | Method | Path | Access | Purpose |
 |---|---|---|---|

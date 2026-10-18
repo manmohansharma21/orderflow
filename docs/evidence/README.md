@@ -44,3 +44,10 @@ The original screenshot with `grep DATABASE_URL .env` visibly exposed a local co
 ## Architecture clarification
 
 OrderFlow is a **modular monolith**, not a microservices system. The HTTP APIs are routes in one Go/Gin process. `internal/http`, `service`, `repository`, `domain`, `cache`, `worker`, and `observability` are modules/packages, not separate deployed services. PostgreSQL and optional Redis are infrastructure dependencies. Evidence should show APIs, transactional behavior, workers, DB/cache, and CI; do not invent service-to-service screenshots.
+
+## Initial Postman captures and authorization diagnosis
+
+User-supplied initial Postman screenshots are preserved under `docs/evidence/postman/initial/`. The login screenshot is redacted; the original displayed an active JWT and is intentionally not included. The 401/403 product-create screenshots are troubleshooting history, not successful CRUD evidence. See `docs/postman/POSTMAN_ADMIN_TOKEN_TROUBLESHOOTING.md`.
+
+Important distinction: `GET /products` is public and expected to return `200`. `POST/PATCH/DELETE /products` require a valid ADMIN token. An empty `adminToken` produces `401 bearer token required`; a valid CUSTOMER token produces `403 insufficient permissions`. Run the collection's existing-ADMIN login request and verify `user.role == ADMIN` before admin operations.
+

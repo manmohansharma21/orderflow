@@ -1,8 +1,8 @@
 {
   "info": {
     "_postman_id": "a8770ef9-669c-4ce8-91d6-6e49c9e3b287",
-    "name": "OrderFlow — Guided Local API Evidence Run",
-    "description": "A guided, manual-order Postman collection for the OrderFlow Go/Gin modular monolith. Import it, set the local mock callback secret only in Postman Current Value, and run each request in sequence. It expects an existing local ADMIN user (defaults to the previously used local test admin). Do not use against production. Do not export or share populated secrets/tokens. Screenshots guidance is in docs/postman/ORDERFLOW_POSTMAN_ATOMIC_STEPS.md.",
+    "name": "OrderFlow — Guided Local API Evidence Run (Admin Token Fix)",
+    "description": "Guided local-only Postman collection. Run folder 01 through request 05 (Login existing ADMIN) before any product/admin operation. Admin token is stored only when the login response proves role=ADMIN; protected admin requests fail fast otherwise. GET /products is public; POST/PATCH/DELETE /products require ADMIN. Never export/share populated secrets or tokens. Do not use against production.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
@@ -178,6 +178,11 @@
     },
     {
       "key": "eventSuffix",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "adminRoleVerified",
       "value": "",
       "type": "string"
     }
@@ -415,13 +420,33 @@
           "response": [],
           "event": [
             {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.unset('adminToken');",
+                  "pm.collectionVariables.unset('adminRoleVerified');"
+                ]
+              }
+            },
+            {
               "listen": "test",
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('admin login succeeds', () => pm.response.to.have.status(200));",
-                  "pm.test('account has ADMIN role', () => pm.expect(pm.response.json().user.role).to.eql('ADMIN'));",
-                  "pm.collectionVariables.set('adminToken', pm.response.json().access_token);"
+                  "const body = pm.response.json();",
+                  "const role = body && body.user ? body.user.role : undefined;",
+                  "const token = body ? body.access_token : undefined;",
+                  "pm.test('admin login returns 200', () => pm.response.to.have.status(200));",
+                  "pm.test('account has ADMIN role', () => pm.expect(role).to.eql('ADMIN'));",
+                  "if (pm.response.code === 200 && role === 'ADMIN' && typeof token === 'string' && token.length > 0) {",
+                  "  pm.collectionVariables.set('adminToken', token);",
+                  "  pm.collectionVariables.set('adminRoleVerified', 'ADMIN');",
+                  "} else {",
+                  "  pm.collectionVariables.unset('adminToken');",
+                  "  pm.collectionVariables.unset('adminRoleVerified');",
+                  "}",
+                  "pm.test('admin token saved only after role verification', () => pm.expect(pm.collectionVariables.get('adminRoleVerified') || '').to.eql('ADMIN'));"
                 ]
               }
             }
@@ -486,6 +511,19 @@
           },
           "response": [],
           "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const adminToken = pm.collectionVariables.get('adminToken') || '';",
+                  "const verifiedRole = pm.collectionVariables.get('adminRoleVerified') || '';",
+                  "if (!adminToken || verifiedRole !== 'ADMIN') {",
+                  "  throw new Error('Admin token is not verified. Run Folder 01 request 05 — Login existing ADMIN, and confirm response role is ADMIN.');",
+                  "}"
+                ]
+              }
+            },
             {
               "listen": "test",
               "script": {
@@ -556,6 +594,11 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
+                  "const adminToken = pm.collectionVariables.get('adminToken') || '';",
+                  "const verifiedRole = pm.collectionVariables.get('adminRoleVerified') || '';",
+                  "if (!adminToken || verifiedRole !== 'ADMIN') {",
+                  "  throw new Error('Admin token is not verified. Run Folder 01 request 05 — Login existing ADMIN, and confirm response role is ADMIN.');",
+                  "}",
                   "pm.collectionVariables.set('sku', 'OF-A-' + pm.variables.replaceIn('{{$guid}}'));"
                 ]
               }
@@ -607,6 +650,11 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
+                  "const adminToken = pm.collectionVariables.get('adminToken') || '';",
+                  "const verifiedRole = pm.collectionVariables.get('adminRoleVerified') || '';",
+                  "if (!adminToken || verifiedRole !== 'ADMIN') {",
+                  "  throw new Error('Admin token is not verified. Run Folder 01 request 05 — Login existing ADMIN, and confirm response role is ADMIN.');",
+                  "}",
                   "pm.collectionVariables.set('sku2', 'OF-B-' + pm.variables.replaceIn('{{$guid}}'));"
                 ]
               }
@@ -651,6 +699,19 @@
           },
           "response": [],
           "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const adminToken = pm.collectionVariables.get('adminToken') || '';",
+                  "const verifiedRole = pm.collectionVariables.get('adminRoleVerified') || '';",
+                  "if (!adminToken || verifiedRole !== 'ADMIN') {",
+                  "  throw new Error('Admin token is not verified. Run Folder 01 request 05 — Login existing ADMIN, and confirm response role is ADMIN.');",
+                  "}"
+                ]
+              }
+            },
             {
               "listen": "test",
               "script": {
@@ -733,6 +794,19 @@
           "response": [],
           "event": [
             {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const adminToken = pm.collectionVariables.get('adminToken') || '';",
+                  "const verifiedRole = pm.collectionVariables.get('adminRoleVerified') || '';",
+                  "if (!adminToken || verifiedRole !== 'ADMIN') {",
+                  "  throw new Error('Admin token is not verified. Run Folder 01 request 05 — Login existing ADMIN, and confirm response role is ADMIN.');",
+                  "}"
+                ]
+              }
+            },
+            {
               "listen": "test",
               "script": {
                 "type": "text/javascript",
@@ -798,6 +872,19 @@
           "response": [],
           "event": [
             {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const adminToken = pm.collectionVariables.get('adminToken') || '';",
+                  "const verifiedRole = pm.collectionVariables.get('adminRoleVerified') || '';",
+                  "if (!adminToken || verifiedRole !== 'ADMIN') {",
+                  "  throw new Error('Admin token is not verified. Run Folder 01 request 05 — Login existing ADMIN, and confirm response role is ADMIN.');",
+                  "}"
+                ]
+              }
+            },
+            {
               "listen": "test",
               "script": {
                 "type": "text/javascript",
@@ -837,6 +924,19 @@
           "response": [],
           "event": [
             {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const adminToken = pm.collectionVariables.get('adminToken') || '';",
+                  "const verifiedRole = pm.collectionVariables.get('adminRoleVerified') || '';",
+                  "if (!adminToken || verifiedRole !== 'ADMIN') {",
+                  "  throw new Error('Admin token is not verified. Run Folder 01 request 05 — Login existing ADMIN, and confirm response role is ADMIN.');",
+                  "}"
+                ]
+              }
+            },
+            {
               "listen": "test",
               "script": {
                 "type": "text/javascript",
@@ -862,6 +962,19 @@
           },
           "response": [],
           "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const adminToken = pm.collectionVariables.get('adminToken') || '';",
+                  "const verifiedRole = pm.collectionVariables.get('adminRoleVerified') || '';",
+                  "if (!adminToken || verifiedRole !== 'ADMIN') {",
+                  "  throw new Error('Admin token is not verified. Run Folder 01 request 05 — Login existing ADMIN, and confirm response role is ADMIN.');",
+                  "}"
+                ]
+              }
+            },
             {
               "listen": "test",
               "script": {
@@ -1544,6 +1657,19 @@
           "response": [],
           "event": [
             {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const adminToken = pm.collectionVariables.get('adminToken') || '';",
+                  "const verifiedRole = pm.collectionVariables.get('adminRoleVerified') || '';",
+                  "if (!adminToken || verifiedRole !== 'ADMIN') {",
+                  "  throw new Error('Admin token is not verified. Run Folder 01 request 05 — Login existing ADMIN, and confirm response role is ADMIN.');",
+                  "}"
+                ]
+              }
+            },
+            {
               "listen": "test",
               "script": {
                 "type": "text/javascript",
@@ -1685,6 +1811,19 @@
           "response": [],
           "event": [
             {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const adminToken = pm.collectionVariables.get('adminToken') || '';",
+                  "const verifiedRole = pm.collectionVariables.get('adminRoleVerified') || '';",
+                  "if (!adminToken || verifiedRole !== 'ADMIN') {",
+                  "  throw new Error('Admin token is not verified. Run Folder 01 request 05 — Login existing ADMIN, and confirm response role is ADMIN.');",
+                  "}"
+                ]
+              }
+            },
+            {
               "listen": "test",
               "script": {
                 "type": "text/javascript",
@@ -1724,6 +1863,19 @@
           },
           "response": [],
           "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const adminToken = pm.collectionVariables.get('adminToken') || '';",
+                  "const verifiedRole = pm.collectionVariables.get('adminRoleVerified') || '';",
+                  "if (!adminToken || verifiedRole !== 'ADMIN') {",
+                  "  throw new Error('Admin token is not verified. Run Folder 01 request 05 — Login existing ADMIN, and confirm response role is ADMIN.');",
+                  "}"
+                ]
+              }
+            },
             {
               "listen": "test",
               "script": {
@@ -1784,6 +1936,19 @@
           "response": [],
           "event": [
             {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const adminToken = pm.collectionVariables.get('adminToken') || '';",
+                  "const verifiedRole = pm.collectionVariables.get('adminRoleVerified') || '';",
+                  "if (!adminToken || verifiedRole !== 'ADMIN') {",
+                  "  throw new Error('Admin token is not verified. Run Folder 01 request 05 — Login existing ADMIN, and confirm response role is ADMIN.');",
+                  "}"
+                ]
+              }
+            },
+            {
               "listen": "test",
               "script": {
                 "type": "text/javascript",
@@ -1810,6 +1975,19 @@
           "response": [],
           "event": [
             {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const adminToken = pm.collectionVariables.get('adminToken') || '';",
+                  "const verifiedRole = pm.collectionVariables.get('adminRoleVerified') || '';",
+                  "if (!adminToken || verifiedRole !== 'ADMIN') {",
+                  "  throw new Error('Admin token is not verified. Run Folder 01 request 05 — Login existing ADMIN, and confirm response role is ADMIN.');",
+                  "}"
+                ]
+              }
+            },
+            {
               "listen": "test",
               "script": {
                 "type": "text/javascript",
@@ -1835,6 +2013,19 @@
           },
           "response": [],
           "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const adminToken = pm.collectionVariables.get('adminToken') || '';",
+                  "const verifiedRole = pm.collectionVariables.get('adminRoleVerified') || '';",
+                  "if (!adminToken || verifiedRole !== 'ADMIN') {",
+                  "  throw new Error('Admin token is not verified. Run Folder 01 request 05 — Login existing ADMIN, and confirm response role is ADMIN.');",
+                  "}"
+                ]
+              }
+            },
             {
               "listen": "test",
               "script": {
@@ -1879,6 +2070,11 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
+                  "const adminToken = pm.collectionVariables.get('adminToken') || '';",
+                  "const verifiedRole = pm.collectionVariables.get('adminRoleVerified') || '';",
+                  "if (!adminToken || verifiedRole !== 'ADMIN') {",
+                  "  throw new Error('Admin token is not verified. Run Folder 01 request 05 — Login existing ADMIN, and confirm response role is ADMIN.');",
+                  "}",
                   "pm.collectionVariables.set('sku3', 'OF-C-' + pm.variables.replaceIn('{{$guid}}'));"
                 ]
               }
@@ -1910,6 +2106,19 @@
           },
           "response": [],
           "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const adminToken = pm.collectionVariables.get('adminToken') || '';",
+                  "const verifiedRole = pm.collectionVariables.get('adminRoleVerified') || '';",
+                  "if (!adminToken || verifiedRole !== 'ADMIN') {",
+                  "  throw new Error('Admin token is not verified. Run Folder 01 request 05 — Login existing ADMIN, and confirm response role is ADMIN.');",
+                  "}"
+                ]
+              }
+            },
             {
               "listen": "test",
               "script": {
