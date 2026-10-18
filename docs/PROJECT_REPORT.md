@@ -1,7 +1,7 @@
 # OrderFlow Backend Project Report
 
-**Technology:** Go 1.26, Gin, PostgreSQL, `pgx`, JWT, bcrypt, SQL migrations  
-**Repository:** `https://github.com/manmohansharma21/orderflow`  
+**Technology:** Go 1.26, Gin, PostgreSQL, `pgx`, JWT, bcrypt, SQL migrations
+**Repository:** `https://github.com/manmohansharma21/orderflow`
 **Report scope:** implementation present at remote-review commit `8ffd04e`, plus documentation and CI artifacts proposed in this bundle.
 
 ## 1. Abstract
@@ -120,7 +120,9 @@ Money is stored as integer paise. The database constrains prices/amounts and inv
 
 ## 9. Verification evidence
 
-At baseline commit `8ffd04e`, the project owner ran and reported successful outputs for:
+The prior integration milestone was green at commit `8ffd04e`. This bundle adds Redis and worker tests; the updated CI must pass before reporting these changes as verified. The CI workflow is configured to provide disposable PostgreSQL and Redis services, perform migrations, run tests and race checks, build the image, and probe health/readiness inside the running container.
+
+Prior owner-run test commands were:
 
 ```text
 go test ./...
@@ -142,12 +144,12 @@ The PostgreSQL integration suite covers order stock reservation/audit movements,
 
 ## 11. Limitations and further work
 
-1. **Redis:** no cache layer or TTL/invalidation is implemented at baseline.
-2. **Payment gateway:** provider is a mock; production Stripe/other provider integration, signature verification, retries and provider reconciliation need separate implementation and credentials.
-3. **Reconciliation scheduling:** report endpoint is on-demand; no scheduled worker/cron is implemented.
-4. **Cloud deployment:** no AWS resources have been provisioned or evidenced. An AWS deployment guide is provided separately as a plan, not proof of deployment.
-5. **Operational evidence:** Postman execution screenshots and real CI run screenshots remain to be collected.
-6. **Coverage improvement:** database/config/repository paths may have limited direct unit coverage; integration coverage currently provides the main database correctness confidence.
+1. **Redis:** optional product list/detail cache with TTL and versioned invalidation is included in this milestone. Treat it as verified only after updated CI reports green.
+2. **Payment gateway:** provider remains a mock; production Stripe/other provider integration, provider-native signature verification, retries and provider reconciliation require separate implementation and credentials.
+3. **Scheduled reconciliation:** configurable read-only worker periodically emits the existing report to logs. It does not automatically change orders or payments. Confirm whether the rubric expects a cron/worker or only reconciliation logic.
+4. **Cloud deployment:** no AWS resources have been provisioned or evidenced. The AWS deployment guide is a plan, not proof of deployment.
+5. **Operational evidence:** Postman execution screenshots and actual run URLs still need to be collected.
+6. **Docker:** CI is configured to build and run health/readiness probes against the image; capture its successful run after this milestone is pushed.
 
 ## 12. Conclusion
 

@@ -1,0 +1,42 @@
+// Package worker contains optional background operational workers.
+package worker
+
+import (
+	"context"
+	"log"
+	"time"
+
+	"github.com/manmohansharma21/orderflow/internal/domain"
+)
+
+type ReconciliationReporter interface {
+	ReconciliationReport(context.Context, int) (domain.PaymentReconciliationReport, error)
+}
+
+// RunPeriodicReconciliation is read-only: it emits detected inconsistencies to
+// the application logger; it does not modify payment/order state automatically.
+func RunPeriodicReconciliation(ctx context.Context, reporter ReconciliationReporter, interval time.Duration, olderThanMinutes int, logger *log.Logger) {
+	if interval <= 0 || reporter == nil || logger == nil {
+		return
+	}
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			runCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+			report, err := reporter.ReconciliationReport(runCtx, olderThanMinutes)
+			cancel()
+			if err != nil {
+				logger.Printf("ERROR payment reconciliation failed: %v", err)
+				continue
+			}
+			logger.Printf("payment reconciliation completed issue_count=%d older_than_minutes=%d", report.IssueCount, report.OlderThanMinutes)
+			for _, issue := range report.Issues {
+				logger.Printf("payment reconciliation issue type=%s payment_id=%s order_id=%s payment_status=%s order_status=%s details=%q", issue.IssueType, issue.PaymentID, issue.OrderID, issue.PaymentStatus, issue.OrderStatus, issue.Details)
+			}
+		}
+	}
+}

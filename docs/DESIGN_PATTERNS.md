@@ -98,5 +98,12 @@ erDiagram
 - `HTTP request DTOs` are private structs beside handlers rather than in an `internal/dto` package. Do not add unused duplicate structs.
 - Persistence is explicit SQL/`pgx`; JPA/Hibernate annotations and Spring `ResponseEntity` do not apply to this Go stack. Their comparable responsibilities are handled by request binding, services, repositories and `c.JSON`/HTTP status mapping.
 - The payment provider is MOCK; the HMAC signature format is project-specific.
-- No Redis cache or invalidation logic is part of baseline `8ffd04e`.
-- Reconciliation is an on-demand admin endpoint, not a background cron worker at baseline.
+- The residual implementation bundle adds optional Redis cache-aside behavior for product reads with TTL and generation invalidation.
+- A configurable read-only reconciliation worker periodically reports issues from the existing reconciliation service; it does not modify payment status.
+
+
+## Additional patterns added in the residual milestone
+
+- **Cache-aside (best effort):** the ProductService checks Redis, falls back to PostgreSQL on a miss/error, and caches successful reads with a TTL. PostgreSQL remains authoritative.
+- **Generation-based invalidation:** product mutations increment one Redis generation value instead of scanning keys. New requests use the new namespace immediately; old keys expire by TTL.
+- **Ticker worker / graceful cancellation:** a background worker periodically invokes the read-only reconciliation report and logs the results. Set `RECONCILIATION_INTERVAL_SECONDS=0` to disable it.

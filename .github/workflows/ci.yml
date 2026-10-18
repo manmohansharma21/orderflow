@@ -26,8 +26,18 @@ jobs:
           --health-interval 5s
           --health-timeout 3s
           --health-retries 20
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 20
     env:
       ORDERFLOW_TEST_DATABASE_URL: postgres://orderflow:orderflow_test_password@localhost:5432/orderflow_test?sslmode=disable
+      ORDERFLOW_REDIS_TEST_ADDR: 127.0.0.1:6379
       PGPASSWORD: orderflow_test_password
     steps:
       - name: Checkout
@@ -41,6 +51,10 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install --yes postgresql-client
+      - name: Verify Go module metadata
+        run: |
+          go mod tidy
+          git diff --exit-code -- go.mod go.sum
       - name: Apply migrations to disposable CI database
         shell: bash
         run: |
@@ -49,11 +63,26 @@ jobs:
             echo "Applying ${migration}"
             psql "$ORDERFLOW_TEST_DATABASE_URL" -v ON_ERROR_STOP=1 -f "$migration"
           done
-      - name: Unit and integration tests
+      - name: Unit, database and Redis integration tests
         run: go test -count=1 ./...
       - name: Race-enabled integration tests
         run: go test -race -count=1 ./internal/integration/...
       - name: Vet
         run: go vet ./...
-      - name: Check whitespace errors
+      - name: Whitespace check
         run: git diff --check
+      - name: Build container image
+        run: docker build -t orderflow-ci:${{ github.sha }} .
+      - name: Runtime smoke test in container
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker run --detach --network host --name orderflow-api-smoke             -e PORT=18080             -e APP_ENV=test             -e DATABASE_URL="$ORDERFLOW_TEST_DATABASE_URL"             -e REDIS_ENABLED=true             -e REDIS_ADDR=127.0.0.1:6379             -e REDIS_DB=0             -e PRODUCT_CACHE_TTL_SECONDS=60             -e RECONCILIATION_INTERVAL_SECONDS=0             -e JWT_SECRET=ci-only-jwt-secret-value-long-enough-for-tests             -e MOCK_PAYMENT_WEBHOOK_SECRET=ci-only-mock-webhook-secret-long-enough             orderflow-ci:${{ github.sha }}
+          trap 'docker logs orderflow-api-smoke || true; docker rm -f orderflow-api-smoke >/dev/null 2>&1 || true' EXIT
+          ready=0
+          for attempt in $(seq 1 30); do
+            if curl --silent --show-error --fail http://127.0.0.1:18080/health; then ready=1; break; fi
+            sleep 1
+          done
+          test "$ready" -eq 1
+          curl --silent --show-error --fail http://127.0.0.1:18080/ready

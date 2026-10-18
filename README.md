@@ -2,7 +2,7 @@
 
 OrderFlow is a REST backend for a small e-commerce/order-processing workflow. It is written in Go with Gin, PostgreSQL and `pgx`. The current payment gateway is deliberately a **mock provider** with an HMAC-signed callback; this repository does not yet contain a live Stripe integration or an AWS deployment.
 
-> **Remote review baseline:** `8ffd04e` — `test: cover concurrent orders and payment callbacks`. The owner ran `go test ./...`, `go test -race ./internal/integration/...`, `go vet ./...`, and `git diff --check` successfully at that baseline. The new CI workflow below has not been run by GitHub until pushed.
+> **Implementation milestone:** Redis product-read caching, TTL-based expiration, versioned invalidation, a periodic reconciliation reporter, and a Docker runtime smoke test are included in this change bundle. They must pass the repository workflow after the bundle is committed; do not treat a local ZIP as proof of a green CI run.
 
 ## What is implemented
 
@@ -12,6 +12,9 @@ OrderFlow is a REST backend for a small e-commerce/order-processing workflow. It
 - Transactional inventory reservation; inventory receipts/adjustments and movement audit history.
 - Mock payment initiation with idempotency keys, HMAC-SHA256 callback validation, replay-safe status transitions, and an admin reconciliation report.
 - Health/readiness endpoints and PostgreSQL-backed integration tests, including concurrent order/payment scenarios.
+- Optional Redis-backed product list/detail cache with a 60-second default TTL and generation-based invalidation after product create/update/deactivation.
+- Configurable read-only reconciliation worker that periodically logs stale pending payments or inconsistent order/payment states.
+- CI now tests a disposable PostgreSQL database and Redis, builds the Docker image, and smoke-tests `/health` and `/ready` inside the container.
 
 ## Architecture at a glance (HLD)
 
@@ -24,6 +27,11 @@ flowchart LR
     S --> D[Domain Models and Rules]
     S --> P[Repository Layer]
     P --> DB[(PostgreSQL)]
+    CACHE[(Redis product cache)]
+    S -->|product reads / best-effort cache| CACHE
+    SCHED[Periodic reconciliation worker] --> PSVC[Payment service]
+    PSVC --> PRX[Payment repository]
+    PRX --> DB
     WH[Mock Payment Callback] -->|HMAC-SHA256| PH[Payment Handler]
     PH --> PS[Payment Service]
     PS --> PR[Payment Repository]
@@ -31,7 +39,7 @@ flowchart LR
     DB --- IM[Inventory Movement Audit]
 ```
 
-The diagram represents the current source structure, not a claim that the system is deployed to AWS. The editable diagram sources are in [`docs/diagrams/HLD.mmd`](docs/diagrams/HLD.mmd) and [`docs/diagrams/LLD.mmd`](docs/diagrams/LLD.mmd).
+The Redis cache is optional and fail-open: PostgreSQL remains the source of truth. The scheduled reconciliation worker is read-only and reports issues to application logs; it does not automatically settle payments. This diagram represents source structure, not a claim that the system is deployed to AWS. The editable diagram sources are in [`docs/diagrams/HLD.mmd`](docs/diagrams/HLD.mmd) and [`docs/diagrams/LLD.mmd`](docs/diagrams/LLD.mmd).
 
 ## Low-level design (LLD)
 
@@ -73,11 +81,13 @@ stateDiagram-v2
 | `internal/config` | Environment configuration |
 | `internal/http` | Gin routes, request binding, auth middleware and HTTP status mapping |
 | `internal/domain` | JSON response/domain types and use-case input types |
-| `internal/service` | Business validation, transaction orchestration and state rules |
+| `internal/service` | Business validation, transaction orchestration, state rules and product cache-aside logic |
 | `internal/repository` | PostgreSQL persistence, query isolation and transaction operations |
 | `internal/database` | `pgxpool` connection setup |
 | `migrations` | Versioned SQL schema changes |
-| `internal/integration` | Real PostgreSQL integration and concurrency tests |
+| `internal/integration` | Real PostgreSQL integration and concurrency tests (including optional Redis invalidation test) |
+| `internal/cache` | Redis adapter for product read caching |
+| `internal/worker` | Periodic read-only payment reconciliation reporting |
 
 The existing code already has domain models, request DTO structs (private to the relevant HTTP handler files), repository implementations and services. A separate DTO package is not required for correctness; creating duplicate model/DTO/repository layers would add indirection without adding functionality. See [`docs/DESIGN_PATTERNS.md`](docs/DESIGN_PATTERNS.md) for code-reading guidance.
 
@@ -197,6 +207,25 @@ Full request/response schemas and status codes are in the OpenAPI file.
 - A successful mock payment confirms the order and retains its reservation. A failed payment marks the order FAILED and releases the reservation once.
 - Admin creation is not exposed as a public registration role; registered accounts start as CUSTOMER. For a local admin demo, promote a dedicated test user manually in the local database. Never expose a production database to a demo workflow.
 
+## Redis and scheduled reconciliation
+
+Redis is an optional acceleration layer for `GET /products` and `GET /products/{id}`. Cache entries use a generation-numbered namespace and TTL; product create/update/deactivation increments the generation so new reads cannot reuse prior-generation keys. If Redis is unavailable at startup, the API stays operational and falls back to PostgreSQL. `REDIS_DB` must be 0–15; use separate disposable databases for tests.
+
+A configurable background worker runs the existing reconciliation report periodically and logs each issue. It is read-only; it does not mutate payments/orders or replace a real provider reconciliation process. Set `RECONCILIATION_INTERVAL_SECONDS=0` to disable the worker.
+
+## Docker build and runtime smoke test
+
+The GitHub Actions workflow now starts disposable PostgreSQL and Redis services, runs migrations, executes unit/integration tests and race checks, builds the image, then starts the container and probes `/health` and `/ready`. The green workflow run is the evidence of success; a local Docker build still needs to be executed if the assessment specifically requires a screenshot from the developer machine.
+
 ## Finalization status
 
-Core Go APIs, models, services, repositories, migrations, and automated tests exist at the remote-review baseline. The next engineering gaps are Redis caching, live payment provider integration if the rubric requires it, scheduled reconciliation if required, and real cloud deployment evidence. The documentation bundle intentionally distinguishes implemented behavior from future deployment plans. Track remaining evidence in [`docs/SCREENSHOT_CHECKLIST.md`](docs/SCREENSHOT_CHECKLIST.md) and [`docs/REMOTE_REVIEW_AND_REMAINING_WORK.md`](docs/REMOTE_REVIEW_AND_REMAINING_WORK.md).
+Core Go APIs, models, services, repositories, migrations and automated tests are implemented. Redis caching and scheduled read-only reconciliation are included in this milestone, pending green CI confirmation. A live payment provider and AWS deployment are not claimed here. Track evidence in [`docs/SCREENSHOT_CHECKLIST.md`](docs/SCREENSHOT_CHECKLIST.md) and remaining work in [`docs/REMOTE_REVIEW_AND_REMAINING_WORK.md`](docs/REMOTE_REVIEW_AND_REMAINING_WORK.md).
+
+
+## Screenshot evidence and report
+
+The exact screenshot runbook is in [`docs/evidence/README.md`](docs/evidence/README.md). A formatted 53-page working draft of the Applied Software Project Report is included under `submission/` as DOCX and PDF. It deliberately identifies gaps and includes highlighted placeholders; replace these with truthful final details and real evidence before submitting.
+
+## Residual code milestone (not yet verified on every developer machine)
+
+This branch overlay adds Redis-backed product-read caching with TTL/invalidation and a configurable read-only reconciliation worker. Run `scripts/verify-residual-milestone.sh` followed by `scripts/docker-smoke-test.sh`, commit the updated `go.mod`/`go.sum` when changed, push, and wait for green CI before describing these additions as verified. The original project specification still has gaps: multi-product order requests, order-level idempotency, provider amount/currency and failure-reason validation, stock-consumption semantics after payment success, expiry, reporting and performance benchmarks. See `docs/REMOTE_REVIEW_AND_REMAINING_WORK.md`.

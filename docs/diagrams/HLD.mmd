@@ -1,14 +1,15 @@
 flowchart LR
-    Client[Client / Postman] -->|JSON over HTTP| Gin[Gin Router]
-    Gin --> HTTP[HTTP handlers / request DTOs]
-    HTTP --> Auth[JWT and role middleware]
-    Auth --> Services[Application services]
-    HTTP --> Services
-    Services --> Domain[Domain types and business rules]
-    Services --> Repos[PostgreSQL repositories]
-    Repos --> PG[(PostgreSQL)]
-    Callback[Mock payment provider callback] --> HMAC[HMAC-SHA256 verifier]
-    HMAC --> PaySvc[Payment service]
-    PaySvc --> PayRepo[Payment repository]
-    PayRepo --> PG
-    PG --> Audit[Inventory movement audit]
+    U[Client / Postman] -->|HTTP JSON| R[Gin Router]
+    R --> H[HTTP handlers and request DTOs]
+    H --> A[JWT authentication / role checks]
+    A --> S[Service layer]
+    S --> P[Repository layer]
+    P --> DB[(PostgreSQL - source of truth)]
+    S -. best-effort product reads .-> C[(Redis cache with TTL and versioned invalidation)]
+    M[Product create/update/deactivate] -->|increment cache generation| C
+    WH[HMAC-signed mock payment callback] --> PH[Payment handler]
+    PH --> PS[Payment service]
+    PS --> PR[Payment repository]
+    PR --> DB
+    W[Periodic read-only reconciliation worker] --> PS
+    DB --- IM[Inventory movement audit]

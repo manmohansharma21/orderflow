@@ -8,3 +8,5 @@
 *.sql.backup
 *.dump
 coverage.out
+*.sql.gz
+tmp/
