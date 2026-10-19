@@ -14,7 +14,7 @@ From the repo root:
 ```bash
 unzip -o ~/Downloads/ORDERFLOW_FINAL_EVIDENCE_AND_CLEANUP.zip -d .
 python3 scripts/apply-final-doc-cleanup.py
-python3 -m json.tool docs/postman/OrderFlow_Guided_Evidence.postman_collection.json >/dev/null
+python3 -m json.tool docs/postman/OrderFlow_API_Verification.postman_collection.json >/dev/null
 
 git diff --check
 go test ./...
@@ -26,7 +26,7 @@ Review `git status --short` and `git diff --stat` before staging. Do not stage `
 
 ## Postman import
 
-Import only `docs/postman/OrderFlow_Guided_Evidence.postman_collection.json`. The ZIP includes an atomic request-by-request runbook. Protected routes require JWTs; the collection automates fresh customer registration/login and logs into an existing local admin account once. If the admin login fails, update local Postman Current Value to an existing ADMIN account; do not disable authorization to obtain screenshots.
+Import only `docs/postman/OrderFlow_API_Verification.postman_collection.json`. The ZIP includes an atomic request-by-request runbook. Protected routes require JWTs; the collection automates fresh customer registration/login and logs into an existing local admin account once. If the admin login fails, update local Postman Current Value to an existing ADMIN account; do not disable authorization to obtain screenshots.
 
 ## Monolith vs microservices
 

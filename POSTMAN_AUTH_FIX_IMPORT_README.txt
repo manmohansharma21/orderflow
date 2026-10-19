@@ -1,7 +1,7 @@
 ORDERFLOW POSTMAN AUTH-FIX COLLECTION
 
 Import only this JSON file into Postman:
-  docs/postman/OrderFlow_Guided_Evidence.postman_collection.json
+  docs/postman/OrderFlow_API_Verification.postman_collection.json
 
 Do not import a second collection from another pack. If the older guided collection is already imported, delete that older Postman collection first, then import the auth-fix JSON from this ZIP.
 
