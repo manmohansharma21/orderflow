@@ -52,3 +52,14 @@ OrderFlow is a **modular monolith**, not a microservices system. The HTTP APIs a
 User-supplied initial Postman screenshots are preserved under `docs/evidence/postman/initial/`. The login screenshot is redacted; the original displayed an active JWT and is intentionally not included. The 401/403 product-create screenshots are troubleshooting history, not successful CRUD evidence. See `docs/postman/POSTMAN_ADMIN_TOKEN_TROUBLESHOOTING.md`.
 
 Important distinction: `GET /products` is public and expected to return `200`. `POST/PATCH/DELETE /products` require a valid ADMIN token. An empty `adminToken` produces `401 bearer token required`; a valid CUSTOMER token produces `403 insufficient permissions`. Run the collection's existing-ADMIN login request and verify `user.role == ADMIN` before admin operations.
+
+## Final Postman captures supplied on 19 October 2026
+
+| Capture | File | Meaning |
+|---|---|---|
+| ADMIN login, token redacted | `postman/final-captures/01-admin-login-200-token-redacted.png` | Login returned 200 and role was ADMIN; JWT value is redacted. |
+| Product create | `postman/final-captures/02-product-create-201.png` | Admin product create returned 201 Created. |
+| Inventory availability | `postman/final-captures/03-inventory-availability-200.png` | Availability returned 200; quantities reflect the local test run. |
+| Inventory movement audit | `postman/final-captures/04-inventory-movement-audit-200.png` | Admin movement audit returned 200 and includes opening-balance history. |
+
+The next final captures should be one multi-product order (201), order history (200), and one successful payment/missed-callback recovery result (order CONFIRMED). See `../postman/FINAL_LOCAL_POSTMAN_STEPS.md`. Do not capture every endpoint.
